@@ -8,6 +8,8 @@ struct FlowDependencies {
     let prefs: PrefsStore
     /// Rung (bản thật tự kiểm `prefs.haptics`).
     let haptic: @MainActor (FlowHaptic) -> Void
+    /// Bộ giải "Just solve it" (bảng nạp lười ở lần gọi đầu).
+    let quickSolver: SolverQuick
 }
 
 /// Rung thật bằng UIKit; tắt trong Settings ⇒ không làm gì.

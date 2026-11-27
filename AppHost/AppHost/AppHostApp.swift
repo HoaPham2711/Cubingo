@@ -80,7 +80,8 @@ struct AppHostApp: App {
 
         let prefs = PrefsStore(defaults: .standard)
         _prefs = StateObject(wrappedValue: prefs)
-        flowDeps = FlowDependencies(prefs: prefs, haptic: FlowHaptics.live(prefs: prefs))
+        flowDeps = FlowDependencies(prefs: prefs, haptic: FlowHaptics.live(prefs: prefs),
+                                    quickSolver: SolverQuick(tables: { try SolverKociembaTables.load(bundle: .main) }))
     }
 
     var body: some Scene {
