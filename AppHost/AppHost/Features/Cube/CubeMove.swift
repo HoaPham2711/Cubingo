@@ -74,6 +74,16 @@ struct CubeMove: Hashable {
         }
     }
 
+    /// Chỉ số trong `faceMoves + rotations` (0…26).
+    var tableIndex: Int {
+        switch axis {
+        case .face(let f): return f.rawValue * 3 + turns - 1
+        case .x: return 18 + turns - 1
+        case .y: return 21 + turns - 1
+        case .z: return 24 + turns - 1
+        }
+    }
+
     /// 18 bước mặt theo thứ tự Kociemba: U U2 U' R R2 R' F … B'.
     static let faceMoves: [CubeMove] = CubeFace.allCases.flatMap { f in (1...3).map { CubeMove(.face(f), $0) } }
     /// 9 bước xoay cả khối: x x2 x' y … z'.

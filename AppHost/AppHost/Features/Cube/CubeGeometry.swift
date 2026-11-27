@@ -10,21 +10,21 @@ struct CubeGeometry {
     let positions: [SIMD3<Int>]
     /// Pháp tuyến đơn vị của ô thứ i (mặt chứa ô).
     let normals: [SIMD3<Int>]
-    private let perms: [CubeMove: [Int]]
+    /// Hoán vị theo `CubeMove.tableIndex` (0…26) — mảng thay vì dictionary: `applying` chạy rất nhiều lần ở -O0.
+    private let perms: [[Int]]
+
+    private static let two = CubeGeometry(n: 2)
+    private static let three = CubeGeometry(n: 3)
 
     static func of(n: Int) -> CubeGeometry {
-        cacheLock.lock()
-        defer { cacheLock.unlock() }
-        if let g = cache[n] { return g }
-        let g = CubeGeometry(n: n)
-        cache[n] = g
-        return g
+        switch n {
+        case 2: return two
+        case 3: return three
+        default: preconditionFailure("chỉ hỗ trợ 2×2 và 3×3")
+        }
     }
 
-    private static let cacheLock = NSLock()
-    nonisolated(unsafe) private static var cache: [Int: CubeGeometry] = [:]
-
-    func permutation(_ m: CubeMove) -> [Int] { perms[m]! }
+    func permutation(_ m: CubeMove) -> [Int] { perms[m.tableIndex] }
 
     /// Toạ độ nhân đôi của chỉ số hàng/cột i.
     static func doubled(_ i: Int, n: Int) -> Int { 2 * i - (n - 1) }
@@ -94,7 +94,7 @@ struct CubeGeometry {
         var index: [Key: Int] = [:]
         for i in pos.indices { index[Key(p: pos[i], q: nor[i])] = i }
 
-        var perms: [CubeMove: [Int]] = [:]
+        var perms = [[Int]](repeating: [], count: 27)
         for m in CubeMove.faceMoves + CubeMove.rotations {
             let spec = Self.axisSpec(m.axis)
             var perm = Array(pos.indices)
@@ -106,7 +106,7 @@ struct CubeGeometry {
                 }
                 perm[index[Key(p: p, q: q)]!] = j
             }
-            perms[m] = perm
+            perms[m.tableIndex] = perm
         }
         self.perms = perms
     }
