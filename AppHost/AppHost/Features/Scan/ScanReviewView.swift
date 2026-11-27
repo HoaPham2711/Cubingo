@@ -126,7 +126,7 @@ struct ScanReviewView: View {
 
     private func continueTapped() {
         switch outcome {
-        case .ok(let f), .autoFixed(let f): flow.didReview(f, palette: model.palette)
+        case .ok(let f), .autoFixed(let f): flow.didReview(f, palette: model.palette, white: model.whiteReference)
         default: break
         }
     }

@@ -11,6 +11,24 @@ enum GuideCheckFlow {
         }
     }
 
+    /// Như `classify` nhưng cân trắng trước bằng mốc của lần quét đầu (bảng màu đo sau cân trắng).
+    static func classify(_ samples: [CubeRGB], palette: CubePalette, white: CubeRGB?) -> [CubeColor] {
+        classify(white.map { CubeColorMath.whiteBalanced(samples, white: $0) } ?? samples, palette: palette)
+    }
+
+    /// Mặt đang thấy có đúng là mặt được yêu cầu không (tâm khớp) — gác tự chụp ở chế độ kiểm tra.
+    static func isRequestedSide(_ s: [CubeRGB], palette: CubePalette, white: CubeRGB?, spec: GuideCheckSpec,
+                                expected: CubeFacelets) -> Bool {
+        guard s.count == 9 else { return false }
+        return classify(s, palette: palette, white: white)[4] == expected.center(spec.face)
+    }
+
+    static func outcome(samples: [CubeRGB], palette: CubePalette, white: CubeRGB?, spec: GuideCheckSpec,
+                        expected: CubeFacelets) -> GuideCheckOutcome {
+        GuideCheck.matches(classify(samples, palette: palette, white: white), expected: expected, spec: spec)
+            ? .match : .mismatch
+    }
+
     static func outcome(samples: [CubeRGB], palette: CubePalette, spec: GuideCheckSpec,
                         expected: CubeFacelets) -> GuideCheckOutcome {
         GuideCheck.matches(classify(samples, palette: palette), expected: expected, spec: spec) ? .match : .mismatch
@@ -34,6 +52,7 @@ struct GuideCheckView: View {
                              mode: .checkFace(GuideCheck.spec(kind), expected: session.state),
                              onFace: { samples in
                                  let o = GuideCheckFlow.outcome(samples: samples, palette: palette,
+                                                                white: flow.whiteReference,
                                                                 spec: GuideCheck.spec(kind), expected: session.state)
                                  if o == .match {
                                      deps.haptic(.success)
@@ -43,7 +62,11 @@ struct GuideCheckView: View {
                                      mismatch = true
                                  }
                              },
-                             onSkip: { flow.checkSkipped() })
+                             onSkip: { flow.checkSkipped() },
+                             acceptsFace: { samples in
+                                 GuideCheckFlow.isRequestedSide(samples, palette: palette, white: flow.whiteReference,
+                                                                spec: GuideCheck.spec(kind), expected: session.state)
+                             })
                 } else {
                     ScanPermissionView(screen: .denied, onAllow: {}, onManual: { flow.checkSkipped() })
                 }

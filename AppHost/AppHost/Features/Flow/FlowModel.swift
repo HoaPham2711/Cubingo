@@ -20,6 +20,8 @@ final class FlowModel: ObservableObject {
     /// Khối đã kiểm (hợp lệ) và bảng màu của nó.
     @Published private(set) var cube: CubeFacelets?
     @Published private(set) var palette: CubePalette?
+    /// Mốc cân trắng của lần quét đã dùng cho khối hiện tại (`nil`: nhập tay / không cân trắng).
+    @Published private(set) var whiteReference: CubeRGB?
     /// Phiên chỉ bước đang chạy.
     @Published private(set) var session: GuideSession?
     @Published var alert: FlowAlert?
@@ -42,7 +44,8 @@ final class FlowModel: ObservableObject {
     }
 
     /// Khối hợp lệ ⇒ màn chọn cách giải.
-    func didReview(_ f: CubeFacelets, palette: CubePalette) {
+    func didReview(_ f: CubeFacelets, palette: CubePalette, white: CubeRGB? = nil) {
+        whiteReference = white
         if isRechecking, let old = session {
             replan(from: f, palette: palette, old: old)
             return
@@ -55,7 +58,8 @@ final class FlowModel: ObservableObject {
     /// Dựng lời giải và mở màn chỉ bước. Teach me: 7 chặng từ màu nền của bảng màu. Just solve it: một chặng gói
     /// lời giải hai pha; lỗi/hết giờ ⇒ `alert`, không đổi route.
     func startGuide(_ mode: GuideMode, quickSolver: SolverQuick) async {
-        guard let cube, let palette, !isSolving else { return }
+        // Chỉ từ màn chọn cách giải (bấm hai lần ⇒ không mở hai màn chỉ bước).
+        guard let cube, let palette, !isSolving, path.last == .mode else { return }
         let base = palette.baseColor
         switch mode {
         case .teach:
@@ -133,6 +137,7 @@ final class FlowModel: ObservableObject {
         scan = nil
         cube = nil
         palette = nil
+        whiteReference = nil
         session = nil
         alert = nil
         isRechecking = false

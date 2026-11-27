@@ -18,6 +18,8 @@ final class ScanReviewModel: ObservableObject {
     @Published private(set) var issue: CubeIssue?
     @Published private(set) var suspects: Set<Int> = []
     let isManual: Bool
+    /// Mốc cân trắng của lần quét (nhập tay ⇒ `nil`).
+    let whiteReference: CubeRGB?
     private var confidence: [Double]?
     /// Hai tâm quá giống nhau — chặn cho tới khi người dùng chạm sửa một ô của hai mặt đó.
     private var pendingAmbiguous: (CubeFace, CubeFace)?
@@ -31,6 +33,7 @@ final class ScanReviewModel: ObservableObject {
         palette = scan.palette
         confidence = scan.confidence
         isManual = false
+        whiteReference = scan.whiteReference
         if let (a, b) = scan.ambiguousCenters {
             pendingAmbiguous = (CubeFace(rawValue: Int(a.raw))!, CubeFace(rawValue: Int(b.raw))!)
         }
@@ -47,6 +50,7 @@ final class ScanReviewModel: ObservableObject {
         facelets = f
         palette = CubePalette(colors: colors)
         isManual = true
+        whiteReference = nil
     }
 
     static func isCenter(_ i: Int) -> Bool { i % 9 == 4 }

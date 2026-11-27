@@ -20,8 +20,9 @@ enum GuideText {
         case (.face(.f), 1): return String(localized: "Turn the front clockwise")
         case (.face(.f), 3): return String(localized: "Turn the front counterclockwise")
         case (.face(.f), _): return String(localized: "Turn the front twice")
-        case (.face(.b), 1): return String(localized: "Turn the back counterclockwise")
-        case (.face(.b), 3): return String(localized: "Turn the back clockwise")
+        // Nhìn từ PHÍA TRƯỚC (người mới hay tự nhìn vào mặt sau ⇒ xoay ngược chiều).
+        case (.face(.b), 1): return String(localized: "Turn the back counterclockwise, as seen from the front")
+        case (.face(.b), 3): return String(localized: "Turn the back clockwise, as seen from the front")
         case (.face(.b), _): return String(localized: "Turn the back twice")
         case (.x, 1): return String(localized: "Roll the whole cube forward so the front goes up")
         case (.x, 3): return String(localized: "Roll the whole cube back so the front goes down")

@@ -8,10 +8,14 @@ struct ScanResult: Equatable {
     let confidence: [Double]
     /// Hai tâm quá giống nhau (ΔE < 15) ⇒ người dùng phải sửa tay.
     let ambiguousCenters: (CubeColor, CubeColor)?
+    /// Mẫu thô của tâm dùng làm mốc cân trắng (`nil` ⇒ không cân trắng). Quét kiểm tra sau chặng cân trắng bằng mốc
+    /// này để so được với `palette` (đã cân trắng).
+    var whiteReference: CubeRGB? = nil
 
     static func == (a: ScanResult, b: ScanResult) -> Bool {
         a.facelets == b.facelets && a.palette == b.palette && a.confidence == b.confidence
             && a.ambiguousCenters?.0 == b.ambiguousCenters?.0 && a.ambiguousCenters?.1 == b.ambiguousCenters?.1
+            && a.whiteReference == b.whiteReference
     }
 }
 
@@ -28,10 +32,12 @@ enum ScanClusterer {
         precondition(samples.count == 54, "cần 54 mẫu")
         let centerIndex = (0..<6).map { $0 * 9 + 4 }
         var balanced = samples
+        var whiteRef: CubeRGB?
         let candidates = centerIndex.filter { CubeColorMath.lab(samples[$0]).x > 50 }
         if let w = candidates.min(by: { CubeColorMath.chroma(samples[$0]) < CubeColorMath.chroma(samples[$1]) }),
            CubeColorMath.chroma(samples[w]) < whiteReferenceMaxChroma {
             balanced = CubeColorMath.whiteBalanced(samples, white: samples[w])
+            whiteRef = samples[w]
         }
         let labs = balanced.map(CubeColorMath.lab)
         func dist(_ i: Int, _ k: Int) -> Double {
@@ -69,6 +75,6 @@ enum ScanClusterer {
             }
         }
         return ScanResult(facelets: CubeFacelets(n: 3, stickers: stickers), palette: palette,
-                          confidence: confidence, ambiguousCenters: ambiguous)
+                          confidence: confidence, ambiguousCenters: ambiguous, whiteReference: whiteRef)
     }
 }

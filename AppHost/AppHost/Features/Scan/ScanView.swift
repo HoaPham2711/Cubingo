@@ -26,9 +26,41 @@ final class ScanCaptureModel: ObservableObject {
     var step: ScanStep { steps[min(stepIndex, steps.count - 1)] }
     var capturedCount: Int { grids.count }
 
+    /// Trung tâm của từng lần chụp đã nhận (để hoàn tác).
+    private var history: [CubeRGB] = []
+    static let flatFaceDeltaE = 12.0
+
+    /// Bắt đầu lại từ đầu (quay về từ màn kiểm tra bằng "Scan again").
+    func reset() {
+        stepIndex = 0
+        grids = [:]
+        message = nil
+        result = nil
+        lastCenter = nil
+        history = []
+    }
+
+    /// Hoàn tác lần chụp gần nhất (chụp nhầm mặt bàn, nhầm mặt…).
+    func undoLast() {
+        guard stepIndex > 0, result == nil else { return }
+        stepIndex -= 1
+        if let face = steps[stepIndex].face { grids[face] = nil }
+        history.removeLast()
+        lastCenter = history.last
+        message = nil
+    }
+
+    var canUndo: Bool { stepIndex > 0 && result == nil }
+
+    /// 9 ô gần như cùng một màu ⇒ nhiều khả năng không phải mặt khối (bàn, trần) — không tự chụp (chụp tay vẫn được,
+    /// mặt đã giải thật cũng đều màu).
+    static func looksFlat(_ s: [CubeRGB]) -> Bool {
+        s.allSatisfy { CubeColorMath.deltaE($0, s[4]) < flatFaceDeltaE }
+    }
+
     /// Tự chụp chỉ khi tâm đã đổi so với lần chụp trước (người dùng đã xoay khối).
     func allowsAutoCapture(_ s: [CubeRGB]) -> Bool {
-        guard s.count == 9, result == nil else { return false }
+        guard s.count == 9, result == nil, !Self.looksFlat(s) else { return false }
         guard let lastCenter else { return true }
         return CubeColorMath.deltaE(s[4], lastCenter) >= Self.sameCenterDeltaE
     }
@@ -51,6 +83,7 @@ final class ScanCaptureModel: ObservableObject {
         }
         message = nil
         lastCenter = s[4]
+        history.append(s[4])
         stepIndex += 1
         if stepIndex >= steps.count {
             let samples = ScanProtocol.assemble(grids)
@@ -70,6 +103,8 @@ struct ScanView: View {
     /// Chế độ kiểm tra: lưới 9 mẫu vừa chụp.
     var onFace: (([CubeRGB]) -> Void)?
     var onSkip: (() -> Void)?
+    /// Chế độ kiểm tra: chỉ tự chụp khi mặt đang thấy đúng là mặt được yêu cầu.
+    var acceptsFace: (([CubeRGB]) -> Bool)?
 
     private var checkFace: CubeFace? {
         if case let .checkFace(spec, _) = mode { return spec.face }
@@ -97,6 +132,8 @@ struct ScanView: View {
         .styleBackground()
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
+            // Quay lại từ màn kiểm tra ("Scan again") ⇒ quét lại từ đầu.
+            if model.result != nil { model.reset() }
             camera.start()
             camera.expect(checkFace ?? model.step.face ?? .f)
         }
@@ -202,6 +239,11 @@ struct ScanView: View {
                 }
             }
             .accessibilityLabel(Text("Capture this side"))
+            if checkFace == nil, model.canUndo {
+                Button("Undo last side") { model.undoLast() }
+                    .scaledFont(size: 15, weight: .semibold, design: .rounded)
+                    .foregroundColor(DSColor.textSecondary)
+            }
             if checkFace != nil {
                 Button("Skip") { onSkip?() }
                     .scaledFont(size: 16, weight: .semibold, design: .rounded)
@@ -220,7 +262,10 @@ struct ScanView: View {
         guard s.count == 9 else { return }
         tip = ScanLighting.tip(s)
         guard stabilizer.feed(s, at: CACurrentMediaTime()) else { return }
-        if checkFace != nil || model.allowsAutoCapture(s) { capture(s) } else { stabilizer.reset() }
+        let allowed = checkFace != nil
+            ? (!ScanCaptureModel.looksFlat(s) || acceptsFace != nil) && (acceptsFace?(s) ?? true)
+            : model.allowsAutoCapture(s)
+        if allowed { capture(s) } else { stabilizer.reset() }
     }
 
     private func capture(_ s: [CubeRGB]) {

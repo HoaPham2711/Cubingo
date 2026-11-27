@@ -9,7 +9,7 @@ final class GuideTextTests: XCTestCase {
         XCTAssertEqual(GuideText.sentence(m("R'")), "Turn the right side down")
         XCTAssertEqual(GuideText.sentence(m("R2")), "Turn the right side twice")
         XCTAssertEqual(GuideText.sentence(m("U")), "Turn the top to the left")
-        XCTAssertEqual(GuideText.sentence(m("B")), "Turn the back counterclockwise")
+        XCTAssertEqual(GuideText.sentence(m("B")), "Turn the back counterclockwise, as seen from the front")
         XCTAssertEqual(GuideText.sentence(m("x")), "Roll the whole cube forward so the front goes up")
         XCTAssertEqual(GuideText.sentence(m("y'")), "Turn the whole cube to the right")
         XCTAssertEqual(GuideText.sentence(m("z")), "Tip the whole cube to the right")

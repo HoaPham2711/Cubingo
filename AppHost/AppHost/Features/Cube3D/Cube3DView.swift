@@ -74,6 +74,11 @@ final class Cube3DController {
     private var arrow: Entity?
     private var shownHighlight: CubeMove??
     private var installed = false
+    private var animationTask: Task<Void, Never>?
+    private var pivots: [Entity] = []
+
+    /// Trạng thái khối đang hiện (test).
+    var displayedFacelets: CubeFacelets? { scene?.facelets() }
 
     static let yaw: Float = -35 * .pi / 180
     static let pitch: Float = 30 * .pi / 180
@@ -101,6 +106,9 @@ final class Cube3DController {
         if cubieEntities.isEmpty || scene?.n != state.n { build(n: state.n) }
         if let animation, animation.token != lastToken {
             lastToken = animation.token
+            // Hoạt ảnh trước chưa xong (bấm Next/Back nhanh): huỷ, trả mọi khối con về gốc — không để lần hoàn tất cũ
+            // vẽ đè trạng thái cũ lên trạng thái mới.
+            cancelAnimation()
             let move = animation.reverse ? animation.move.inverse : animation.move
             let start = animation.reverse ? state.applying(animation.move) : state.applying(animation.move.inverse)
             show(Cube3DScene(start), palette: palette, highlight: nil)
@@ -188,6 +196,15 @@ final class Cube3DController {
         }
     }
 
+    private func cancelAnimation() {
+        animationTask?.cancel()
+        animationTask = nil
+        for e in cubieEntities.values where e.parent !== cubeRoot { e.setParent(cubeRoot, preservingWorldTransform: true) }
+        pivots.forEach { $0.removeFromParent() }
+        pivots = []
+        animating = false
+    }
+
     /// Quay lớp: gom khối con vào entity cha tạm, quay cha, xong thì trả về gốc. Bước kép = hai nấc, mỗi nấc 0,75 ×
     /// thời lượng (tổng ×1,5).
     private func animate(_ m: CubeMove, quarter: Double, completion: @escaping () -> Void) {
@@ -198,23 +215,29 @@ final class Cube3DController {
         let steps = m.turns == 2 ? [CubeMove(m.axis, 1), CubeMove(m.axis, 1)] : [m]
         let each = m.turns == 2 ? quarter * 0.75 : quarter
         let ids = s.members(m).map { s.cubies[$0].id }
-        Task { @MainActor [weak self] in
+        let token = lastToken
+        animationTask = Task { @MainActor [weak self] in
             for step in steps {
-                guard let self else { return }
+                guard let self, !Task.isCancelled else { return }
                 let pivot = Entity()
                 self.cubeRoot.addChild(pivot)
+                self.pivots.append(pivot)
                 for id in ids { self.cubieEntities[id]?.setParent(pivot, preservingWorldTransform: true) }
                 let aa = Cube3DScene.axisAngle(step)
                 var t = pivot.transform
                 t.rotation = simd_quatf(angle: aa.radians, axis: aa.axis)
                 pivot.move(to: t, relativeTo: self.cubeRoot, duration: each, timingFunction: .easeInOut)
                 try? await Task.sleep(nanoseconds: UInt64(each * 1_000_000_000))
+                guard !Task.isCancelled, self.lastToken == token else { return }
                 for id in ids { self.cubieEntities[id]?.setParent(self.cubeRoot, preservingWorldTransform: true) }
                 pivot.removeFromParent()
+                self.pivots.removeAll { $0 === pivot }
                 s.apply(step)
                 self.scene = s
             }
-            self?.animating = false
+            guard let self, !Task.isCancelled, self.lastToken == token else { return }
+            self.animating = false
+            self.animationTask = nil
             completion()
         }
     }
