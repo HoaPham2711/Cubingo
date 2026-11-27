@@ -34,6 +34,8 @@
 	<false/>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>NSCameraUsageDescription</key>
+	<string>This app uses the camera to read the colors of your cube. Images never leave your device.</string>
 	<key>ProductIDs</key>
 	<string>$(APP_PRODUCT_IDS)</string>
 	<key>SupportEmail</key>

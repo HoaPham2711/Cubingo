@@ -1,7 +1,8 @@
 import SwiftUI
 import UIKit
 
-/// Khung chính của app (sau onboarding): `RootShellView` với các tab của `AppTab`, tour xem lại, đánh giá What's New.
+/// Khung chính của app (sau onboarding): một luồng (`HomeView` — `NavigationStack` gốc ở màn chọn khối), không tab bar;
+/// Settings mở bằng sheet (nút bánh răng, `tabRouter.requested == .settings`, route preview `settings`).
 /// Mọi đối tượng nghiệp vụ truyền TƯỜNG MINH qua `init` (không `@EnvironmentObject`: cover không kế thừa environment).
 struct AppShellView: View {
     let config: AppConfig
@@ -10,18 +11,18 @@ struct AppShellView: View {
     let reviewPrompter: ReviewPrompter
     let reviewScheduler: ReviewScheduler
     @ObservedObject var whatsNew: WhatsNewPresenter
-    /// Yêu cầu đổi tab từ nơi không giữ `nav` (nút thẻ What's New) — xem `AppTabRouter`.
+    /// Yêu cầu mở mục từ nơi không giữ trạng thái khung (nút thẻ What's New) — `.settings` ⇒ mở sheet Settings.
     @ObservedObject var tabRouter: AppTabRouter
     /// `nil` ⇒ Settings chỉ có "Contact us" (không form phản hồi). Chọn ở `AppHostApp` theo khối tuỳ chọn Web API.
     let feedbackTransport: FeedbackTransport?
-    /// Link vào app (Universal Link) đã nhận ở cấp App, chưa mở. Khung chính giao nó cho `onAppLink` rồi xoá — kể cả link
-    /// tới lúc còn onboarding (giao khi khung chính hiện). Khác `nil` ⇒ cổng What's New đóng.
+    /// Link vào app (Universal Link) đã nhận ở cấp App, chưa mở. Khung chính giao nó cho `onAppLink` rồi xoá.
     @Binding var pendingLink: AppLink?
-    /// Mở màn của link — `AppHostApp` truyền `AppLinkActions.perform` (đổi tab qua `tabRouter`).
+    /// Mở màn của link — `AppHostApp` truyền `AppLinkActions.perform`.
     let onAppLink: (AppLink) -> Void
+    @ObservedObject var flow: FlowModel
+    let deps: FlowDependencies
 
-    @StateObject private var nav: ShellNavigationModel<AppTab, AppSidebarExtra>
-    @State private var showTour = false
+    @State private var showSettings = AppPreview.current == .settings
     /// Cover/sheet của route preview đang mở (chỉ Simulator đặt được) — tính vào cổng What's New.
     @State private var previewCoverShown = false
     @State private var copiedFallbackMessage: String?
@@ -30,7 +31,7 @@ struct AppShellView: View {
     init(config: AppConfig, entitlements: Entitlements, updateChecker: UpdateChecker, reviewPrompter: ReviewPrompter,
          reviewScheduler: ReviewScheduler, whatsNew: WhatsNewPresenter,
          tabRouter: AppTabRouter, feedbackTransport: FeedbackTransport?, pendingLink: Binding<AppLink?>,
-         onAppLink: @escaping (AppLink) -> Void) {
+         onAppLink: @escaping (AppLink) -> Void, flow: FlowModel, deps: FlowDependencies) {
         self.config = config
         self.entitlements = entitlements
         self.updateChecker = updateChecker
@@ -41,20 +42,21 @@ struct AppShellView: View {
         self.feedbackTransport = feedbackTransport
         _pendingLink = pendingLink
         self.onAppLink = onAppLink
-        let nav = ShellNavigationModel<AppTab, AppSidebarExtra>(initial: AppPreview.current?.initialTab ?? .home)
-        _nav = StateObject(wrappedValue: nav)
+        self.flow = flow
+        self.deps = deps
     }
 
-    /// Luồng xem lại tour — rỗng thì KHÔNG mở cover (nháy nền đen + log `tour_replay` sai) và ẩn hàng ở Settings.
+    /// Luồng xem lại tour rỗng (Cubingo không có tour) ⇒ ẩn hàng ở Settings.
     private var replayFlowIsEmpty: Bool { AppOnboarding.flow(.replay).isEmpty }
 
     var body: some View {
-        RootShellView(nav: nav, appName: config.displayName,
-                      content: { tab in content(for: tab) },
-                      sidebarRows: { tab in sidebarRows(for: tab) },
-                      detailExtra: { extra in detailExtra(extra) })
-            .appTourSheet(isPresented: $showTour, source: "settings") {
-                AppOnboarding.view(.replay, appName: config.displayName) { showTour = false }
+        HomeView(updateChecker: updateChecker, openStore: openStore, flow: flow, deps: deps,
+                 onOpenSettings: { showSettings = true })
+            .internalDebugSheet(entitlements: entitlements, reviewPrompter: reviewPrompter,
+                                arm: { reviewScheduler.arm($0, bypassPolicy: true) })
+            .sheet(isPresented: $showSettings) {
+                settings
+                    .presentationDragIndicator(.visible)
             }
             .appPreviewPresentations(paywall: AppPaywall.content(config: config),
                                      config: config, feedbackTransport: feedbackTransport,
@@ -65,10 +67,10 @@ struct AppShellView: View {
             } message: {
                 Text(verbatim: copiedFallbackMessage ?? "")
             }
-            // Nút thẻ What's New (sheet ở cấp App hoặc danh sách trong Settings) xin đổi tab ⇒ chọn ở đây, rồi xoá yêu cầu.
+            // Nút thẻ What's New xin mở một mục ⇒ Settings mở sheet, Home đóng sheet; rồi xoá yêu cầu.
             .onChange(of: tabRouter.requested, initial: true) { _, tab in
                 guard let tab else { return }
-                nav.select(tab)
+                showSettings = tab == .settings
                 tabRouter.clear()
             }
             // Link vào app: xoá TRƯỚC rồi mới giao (giao có thể đặt link mới — không được xoá mất nó).
@@ -83,49 +85,28 @@ struct AppShellView: View {
             }
     }
 
-    @ViewBuilder
-    private func content(for tab: AppTab) -> some View {
-        switch tab {
-        case .home:
-            HomeView(
-                updateChecker: updateChecker, openStore: openStore)
-                .internalDebugSheet(entitlements: entitlements, reviewPrompter: reviewPrompter,
-                                    arm: { reviewScheduler.arm($0, bypassPolicy: true) })
-        case .settings:
-            SettingsView(
-                deps: SettingsDependencies(config: config, entitlements: entitlements, updateChecker: updateChecker,
-                                           reviewPrompter: reviewPrompter, paywall: AppPaywall.content(config: config),
-                                           feedbackTransport: feedbackTransport, diagnosticsExtras: {
-                                               []
-                                           }),
-                appSections: {
-                    // App thêm nhóm Settings riêng ở đây.
-                },
-                helpRows: {
-                    NavigationLink(value: SettingsRoute.whatsNew) {
-                        Text("What's New").foregroundColor(DSColor.textPrimary)
-                    }
-                },
-                internalSection: {
-                    AppInternalSettingsSection(entitlements: entitlements, reviewPrompter: reviewPrompter,
-                                               arm: { reviewScheduler.arm($0, bypassPolicy: true) })
-                },
-                destination: { route in settingsDestination(route) },
-                onReplayTour: { if !replayFlowIsEmpty { showTour = true } },
-                replayTourAvailable: !replayFlowIsEmpty)
-        }
-    }
-
-    /// Hàng chỉ sidebar iPad có, chèn dưới hàng của `tab` (rỗng nếu tab không có).
-    @ViewBuilder
-    private func sidebarRows(for tab: AppTab) -> some View {
-        // App chèn hàng sidebar riêng dưới `tab` ở đây.
-    }
-
-    /// Cột chi tiết khi chọn một mục phụ của sidebar iPad.
-    @ViewBuilder
-    private func detailExtra(_ extra: AppSidebarExtra) -> some View {
-        // App dựng cột chi tiết cho mục phụ `extra` ở đây (`AppSidebarExtra` = `Never` ⇒ không bao giờ gọi).
+    private var settings: some View {
+        SettingsView(
+            deps: SettingsDependencies(config: config, entitlements: entitlements, updateChecker: updateChecker,
+                                       reviewPrompter: reviewPrompter, paywall: AppPaywall.content(config: config),
+                                       feedbackTransport: feedbackTransport, diagnosticsExtras: {
+                                           []
+                                       }),
+            appSections: {
+                PrefsSection(prefs: deps.prefs)
+            },
+            helpRows: {
+                NavigationLink(value: SettingsRoute.whatsNew) {
+                    Text("What's New").foregroundColor(DSColor.textPrimary)
+                }
+            },
+            internalSection: {
+                AppInternalSettingsSection(entitlements: entitlements, reviewPrompter: reviewPrompter,
+                                           arm: { reviewScheduler.arm($0, bypassPolicy: true) })
+            },
+            destination: { route in settingsDestination(route) },
+            onReplayTour: {},
+            replayTourAvailable: !replayFlowIsEmpty)
     }
 
     @ViewBuilder
@@ -157,7 +138,7 @@ struct AppShellView: View {
     /// giữ bản sao view lúc bắt đầu chạy, `@Environment` của bản sao là giá trị cũ (lúc mở còn `.inactive`).
     private var whatsNewGate: WhatsNewPresentGate {
         whatsNew.presentGate(sceneActive: UIApplication.shared.applicationState == .active,
-                             coverShown: showTour || previewCoverShown || whatsNew.presentation != nil,
+                             coverShown: showSettings || previewCoverShown || whatsNew.presentation != nil,
                              modalPresented: ModalPresentationProbe.isModalPresented(),
                              extraBlockers: false, appLinkPending: pendingLink != nil)
     }
@@ -183,7 +164,7 @@ enum AppWhatsNew {
     }
 
     /// Chạy nút đã bấm. Điều hướng đi qua `tabs` (sheet What's New gắn ở cấp App, không giữ `nav`); `AppShellView`
-    /// nghe `tabs.requested` và gọi `nav.select`. Khoá lạ ⇒ không làm gì.
+    /// nghe `tabs.requested` (`.settings` ⇒ mở sheet). Khoá lạ ⇒ không làm gì.
     @MainActor
     static func perform(_ action: WhatsNewResolvedAction, tabs: AppTabRouter) {
         // App ánh xạ `action.key` ⇒ đích ở đây (vd `tabs.open(.home)`).
@@ -200,7 +181,7 @@ enum AppLinkActions {
 }
 
 /// Cầu đổi tab cho nơi không giữ `ShellNavigationModel` (vd sheet What's New gắn ở cấp App). `AppHostApp` sở hữu MỘT
-/// bản; `AppShellView` nghe `requested`, gọi `nav.select` rồi `clear()`.
+/// bản; `AppShellView` nghe `requested` (mở/đóng sheet Settings) rồi `clear()`.
 @MainActor
 final class AppTabRouter: ObservableObject {
     @Published private(set) var requested: AppTab?

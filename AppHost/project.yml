@@ -7,7 +7,7 @@ include:
   - Config/Entitlements.generated.yml
 options:
   bundleIdPrefix: com.example
-  deploymentTarget: { iOS: "17.0" }
+  deploymentTarget: { iOS: "18.0" }
   createIntermediateGroups: true
   developmentLanguage: en
 configs: { Debug: debug, Internal: release, Release: release }
@@ -65,6 +65,7 @@ targets:
         FeatureWebAPI: $(APP_FEATURE_WEB_API)
         ProductIDs: $(APP_PRODUCT_IDS)
         UILaunchScreen: {}
+        NSCameraUsageDescription: "This app uses the camera to read the colors of your cube. Images never leave your device."
         ITSAppUsesNonExemptEncryption: false
         # Chốt cứng: app KHÔNG dùng tín hiệu quảng cáo. Cùng với product `FirebaseAnalyticsCore`
         # (biến thể không thu IDFA) ⇒ không cần ATT prompt, privacy label ở mức nhẹ nhất.

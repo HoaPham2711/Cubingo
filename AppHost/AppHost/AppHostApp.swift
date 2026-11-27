@@ -28,6 +28,10 @@ struct AppHostApp: App {
     @StateObject private var tabRouter = AppTabRouter()
     /// Link vào app (Universal Link) đã nhận, chờ khung chính mở — xem `receiveLink`.
     @State private var pendingLink: AppLink?
+    /// Cài đặt + luồng của Cubingo — dựng MỘT lần ở đây, truyền xuống qua `FlowDependencies`.
+    @StateObject private var prefs: PrefsStore
+    @StateObject private var flow = FlowModel()
+    private let flowDeps: FlowDependencies
     @Environment(\.scenePhase) private var scenePhase
 
     /// Host unit test / route preview không cần sản phẩm ⇒ không chạm StoreKit thật.
@@ -73,6 +77,10 @@ struct AppHostApp: App {
         _reviewScheduler = State(initialValue: ReviewScheduler(prompter: prompter, isQuiet: ReviewScheduler.liveIsQuiet,
                                                                present: {}))
         feedbackTransport = Self.makeFeedbackTransport(config: config)
+
+        let prefs = PrefsStore(defaults: .standard)
+        _prefs = StateObject(wrappedValue: prefs)
+        flowDeps = FlowDependencies(prefs: prefs, haptic: FlowHaptics.live(prefs: prefs))
     }
 
     var body: some Scene {
@@ -84,7 +92,8 @@ struct AppHostApp: App {
                 AppShellView(config: config, entitlements: entitlements, updateChecker: updateChecker,
                              reviewPrompter: reviewPrompter, reviewScheduler: reviewScheduler, whatsNew: whatsNew,
                              tabRouter: tabRouter, feedbackTransport: feedbackTransport, pendingLink: $pendingLink,
-                             onAppLink: { AppLinkActions.perform($0, tabs: tabRouter) })
+                             onAppLink: { AppLinkActions.perform($0, tabs: tabRouter) },
+                             flow: flow, deps: flowDeps)
             }, willFinishOnboarding: {
                 // Cài mới đã có tour giới thiệu ⇒ không hiện What's New (ghi lastSeen TRƯỚC khi cờ đổi).
                 whatsNew.onboardingFinished()
