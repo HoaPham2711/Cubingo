@@ -60,12 +60,12 @@ enum CubeColorMath {
         return h < 0 ? h + 360 : h
     }
 
-    /// Cân trắng von Kries trên RGB tuyến tính: `white` thành xám cùng độ sáng (Y), các mẫu khác nhân cùng hệ số.
+    /// Cân trắng von Kries trên RGB tuyến tính: `white` thành TRẮNG (1, 1, 1), các mẫu khác nhân cùng hệ số — vừa bỏ
+    /// ám màu của đèn vừa chuẩn hoá độ sáng (camera tự chỉnh sáng làm mọi màu tối đi ⇒ tên màu theo L* lệch).
     static func whiteBalanced(_ samples: [CubeRGB], white: CubeRGB) -> [CubeRGB] {
         let wr = linear(white.r), wg = linear(white.g), wb = linear(white.b)
-        let y = 0.2126 * wr + 0.7152 * wg + 0.0722 * wb
         guard wr > 1e-6, wg > 1e-6, wb > 1e-6 else { return samples }
-        let kr = y / wr, kg = y / wg, kb = y / wb
+        let kr = 1 / wr, kg = 1 / wg, kb = 1 / wb
         return samples.map {
             CubeRGB(r: gamma(linear($0.r) * kr), g: gamma(linear($0.g) * kg), b: gamma(linear($0.b) * kb))
         }
