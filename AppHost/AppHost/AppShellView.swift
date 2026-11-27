@@ -79,6 +79,7 @@ struct AppShellView: View {
                 pendingLink = nil
                 onAppLink(link)
             }
+            .onAppear { AppPreview.prepareFlow(flow) }
             .task { await evaluateWhatsNew() }
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active { Task { await evaluateWhatsNew() } }

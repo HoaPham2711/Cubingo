@@ -5,6 +5,8 @@ import Foundation
 final class FlowModel: ObservableObject {
     @Published var path: [FlowRoute] = []
     @Published private(set) var puzzle: FlowPuzzle?
+    /// Kết quả quét gần nhất (màn kiểm tra đọc).
+    @Published private(set) var scan: ScanResult?
 
     /// Chỉ nhận khối đang có; đẩy màn quét.
     func choose(_ p: FlowPuzzle) {
@@ -13,9 +15,16 @@ final class FlowModel: ObservableObject {
         path = [.scan]
     }
 
+    /// Quét xong ⇒ màn kiểm tra màu.
+    func didScan(_ r: ScanResult) {
+        scan = r
+        path.append(.review(manual: false))
+    }
+
     /// Về màn chọn khối, xoá mọi trạng thái khối.
     func startOver() {
         path = []
         puzzle = nil
+        scan = nil
     }
 }

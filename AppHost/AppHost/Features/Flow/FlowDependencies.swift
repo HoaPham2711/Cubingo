@@ -10,6 +10,8 @@ struct FlowDependencies {
     let haptic: @MainActor (FlowHaptic) -> Void
     /// Bộ giải "Just solve it" (bảng nạp lười ở lần gọi đầu).
     let quickSolver: SolverQuick
+    /// Quyền camera (Simulator: luôn có — nguồn giả `ScanPreviewSeed`).
+    let cameraAuth: ScanCameraAuth
 }
 
 /// Rung thật bằng UIKit; tắt trong Settings ⇒ không làm gì.

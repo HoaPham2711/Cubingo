@@ -42,7 +42,9 @@ struct HomeView: View {
     @ViewBuilder
     private func destination(_ route: FlowRoute) -> some View {
         switch route {
-        case .scan, .review, .mode, .guide, .done:
+        case .scan:
+            ScanEntryView(flow: flow, deps: deps)
+        case .review, .mode, .guide, .done:
             EmptyView()
         }
     }

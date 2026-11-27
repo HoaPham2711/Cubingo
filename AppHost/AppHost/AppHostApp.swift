@@ -81,7 +81,8 @@ struct AppHostApp: App {
         let prefs = PrefsStore(defaults: .standard)
         _prefs = StateObject(wrappedValue: prefs)
         flowDeps = FlowDependencies(prefs: prefs, haptic: FlowHaptics.live(prefs: prefs),
-                                    quickSolver: SolverQuick(tables: { try SolverKociembaTables.load(bundle: .main) }))
+                                    quickSolver: SolverQuick(tables: { try SolverKociembaTables.load(bundle: .main) }),
+                                    cameraAuth: Self.cameraAuth)
     }
 
     var body: some Scene {
@@ -140,6 +141,15 @@ struct AppHostApp: App {
     /// link khi sheet đóng (link mới nhất thắng); đang onboarding ⇒ khung chính mở link khi hiện.
     private func receiveLink(_ url: URL) {
         AppLinkRouter.route(url, expectedHost: config.webHost, whatsNew: whatsNew) { pendingLink = $0 }
+    }
+
+    /// Simulator không có camera ⇒ nguồn giả của màn quét (quyền luôn có).
+    private static var cameraAuth: ScanCameraAuth {
+        #if targetEnvironment(simulator)
+        return ScanPreviewSeed.cameraAuth
+        #else
+        return .live
+        #endif
     }
 
     // MARK: - Khối tuỳ chọn Web API (cờ build từ `[features] web_api`, xem Features.generated.yml)

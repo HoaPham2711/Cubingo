@@ -31,7 +31,8 @@ final class SmokeTests: XCTestCase {
     func testRoutePreviewCuaApp() {
         // Sáu route của khung luôn có; route riêng của tính năng (nếu có) đứng sau.
         let shellRoutes = ["home", "onboarding", "settings", "paywall", "whatsNew", "feedback"]
-        XCTAssertEqual(AppPreview.allCases.map(\.rawValue), shellRoutes)
+        let featureRoutes = ["scan"]
+        XCTAssertEqual(AppPreview.allCases.map(\.rawValue), shellRoutes + featureRoutes)
         XCTAssertEqual(AppPreview.allCases.filter(\.isOnboarding), [.onboarding])
         XCTAssertEqual(AppPreview.routesNeedingStore, [])
         XCTAssertEqual(AppPreview.settings.initialTab, .settings)
