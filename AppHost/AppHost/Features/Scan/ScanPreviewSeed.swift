@@ -27,5 +27,16 @@ enum ScanPreviewSeed {
         for f in CubeFace.allCases { grids[f] = grid(f) }
         return ScanClusterer.cluster(ScanProtocol.assemble(grids), n: 3)
     }
+
+    /// Như `scanResult` nhưng một ô bị đọc sai màu (route `review` có thông báo lỗi để chụp).
+    static var scanResultWithMistake: ScanResult {
+        let r = scanResult
+        var f = r.facelets
+        let i = (0..<54).first { $0 % 9 != 4 && f.stickers[$0] != f.stickers[CubeFace.u.rawValue * 9 + 4] }!
+        f.stickers[i] = f.center(.u)
+        var conf = r.confidence
+        conf[i] = 1
+        return ScanResult(facelets: f, palette: r.palette, confidence: conf, ambiguousCenters: nil)
+    }
 }
 #endif

@@ -44,7 +44,9 @@ struct HomeView: View {
         switch route {
         case .scan:
             ScanEntryView(flow: flow, deps: deps)
-        case .review, .mode, .guide, .done:
+        case .review(let manual):
+            ScanReviewView(flow: flow, deps: deps, manual: manual)
+        case .mode, .guide, .done:
             EmptyView()
         }
     }

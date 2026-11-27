@@ -8,3 +8,4 @@ trạng thái mẫu cố định.
 | Route preview | Màn |
 |---|---|
 | `scan` | Màn quét (Simulator: nguồn giả tự chụp hết 6 mặt) |
+| `review` | Màn kiểm tra màu, một ô bị đọc sai (có thông báo lỗi) |
