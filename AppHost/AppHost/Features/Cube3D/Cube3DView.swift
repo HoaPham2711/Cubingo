@@ -11,7 +11,8 @@ struct Cube3DAnimation: Equatable {
     let token: Int
 }
 
-/// Khối 3D bằng RealityKit (`RealityView`, camera ảo). Luôn dừng ở `state`; có `animation` mới ⇒ dựng trạng thái
+/// Khối 3D bằng RealityKit (`RealityView`, camera ảo). Chỉ MỘT `Cube3DView` được sống trong một navigation stack:
+/// `RealityView` thứ hai bị che (màn trước vẫn giữ trong stack) làm view trên cùng không vẽ. Luôn dừng ở `state`; có `animation` mới ⇒ dựng trạng thái
 /// trước bước rồi quay lớp tới `state`. Góc nhìn chuẩn lệch 35° sang R, nâng 30° (thấy U, F, R); kéo để xoay xem,
 /// thả ra tự về.
 struct Cube3DView: View {
@@ -80,15 +81,18 @@ final class Cube3DController {
         simd_quatf(angle: pitch, axis: SIMD3(1, 0, 0)) * simd_quatf(angle: yaw, axis: SIMD3(0, 1, 0))
     }
 
+    /// Gọi ở MỖI lần `RealityView` dựng content: SwiftUI có thể dựng lại `RealityView` mà vẫn giữ controller (@State)
+    /// — cảnh phải được thêm vào content mới, không thì khối biến mất.
     func install(in content: RealityViewCameraContent) {
-        guard !installed else { return }
-        installed = true
-        let camera = PerspectiveCamera()
-        camera.camera.fieldOfViewInDegrees = 38
-        camera.position = SIMD3(0, 0, 8.2)
-        world.addChild(camera)
-        world.addChild(cubeRoot)
-        cubeRoot.orientation = Self.restOrientation
+        if !installed {
+            installed = true
+            let camera = PerspectiveCamera()
+            camera.camera.fieldOfViewInDegrees = 38
+            camera.position = SIMD3(0, 0, 8.2)
+            world.addChild(camera)
+            world.addChild(cubeRoot)
+            cubeRoot.orientation = Self.restOrientation
+        }
         content.add(world)
     }
 
@@ -168,7 +172,8 @@ final class Cube3DController {
             e.orientation = c.orientation
             for (normal, color) in c.stickers {
                 let rgb = palette.rgb(color)
-                let k: CGFloat = lit.contains(i) ? 0.28 : 0
+                // Sáng nhẹ: đủ thấy lớp sắp quay mà không làm màu đổi tên (đỏ thành hồng…).
+                let k: CGFloat = lit.contains(i) ? 0.12 : 0
                 let ui = UIColor(red: rgb.r + (1 - rgb.r) * k, green: rgb.g + (1 - rgb.g) * k,
                                  blue: rgb.b + (1 - rgb.b) * k, alpha: 1)
                 stickerEntities[c.id]?[normal]?.model?.materials = [UnlitMaterial(color: ui)]

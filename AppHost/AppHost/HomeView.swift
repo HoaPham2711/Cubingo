@@ -46,8 +46,15 @@ struct HomeView: View {
             ScanEntryView(flow: flow, deps: deps)
         case .review(let manual):
             ScanReviewView(flow: flow, deps: deps, manual: manual)
-        case .mode, .guide, .done:
-            EmptyView()
+        case .mode:
+            FlowModeView(flow: flow, deps: deps)
+        case .guide:
+            if let session = flow.session, let palette = flow.palette {
+                GuideView(session: session, palette: palette, prefs: deps.prefs,
+                          onFinish: { flow.didFinishGuide() })
+            }
+        case .done:
+            GuideDoneView(flow: flow, deps: deps)
         }
     }
 
