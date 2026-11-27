@@ -3,6 +3,12 @@ import SwiftUI
 
 enum ScanCaptureMessage: Equatable { case notFirstSide, alreadyScanned }
 
+/// Quét cả khối (6 mặt) hoặc chỉ một mặt để kiểm tra sau chặng.
+enum ScanMode: Equatable {
+    case full
+    case checkFace(GuideCheckSpec, expected: CubeFacelets)
+}
+
 /// Đi qua `ScanProtocol.cube3`: nhận lưới 9 mẫu mỗi lần chụp, kiểm "đã về mặt đầu" và "mặt đã quét", lắp + phân nhóm
 /// khi đủ 6 mặt.
 @MainActor
@@ -58,6 +64,15 @@ final class ScanCaptureModel: ObservableObject {
 struct ScanView: View {
     @ObservedObject var flow: FlowModel
     let deps: FlowDependencies
+    var mode: ScanMode = .full
+    /// Chế độ kiểm tra: lưới 9 mẫu vừa chụp.
+    var onFace: (([CubeRGB]) -> Void)?
+    var onSkip: (() -> Void)?
+
+    private var checkFace: CubeFace? {
+        if case let .checkFace(spec, _) = mode { return spec.face }
+        return nil
+    }
 
     @StateObject private var camera = ScanCamera()
     @StateObject private var model = ScanCaptureModel()
@@ -66,7 +81,7 @@ struct ScanView: View {
 
     var body: some View {
         VStack(spacing: 16) {
-            progressDots
+            if checkFace == nil { progressDots }
             instruction
             cameraArea
             feedback
@@ -81,7 +96,7 @@ struct ScanView: View {
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             camera.start()
-            camera.expect(model.step.face ?? .f)
+            camera.expect(checkFace ?? model.step.face ?? .f)
         }
         .onDisappear { camera.stop() }
         .onChange(of: camera.samples) { _, s in handle(s) }
@@ -106,13 +121,22 @@ struct ScanView: View {
         .accessibilityLabel(Text("\(model.capturedCount) of 6 sides scanned"))
     }
 
+    private var instructionText: String {
+        switch checkFace {
+        case .d?: return String(localized: "Show us the bottom side")
+        case .u?: return String(localized: "Show us the top side")
+        case .some: return String(localized: "Show us the front side")
+        case nil: return Self.text(model.step.instruction)
+        }
+    }
+
     private var instruction: some View {
         HStack(spacing: 12) {
-            Image(systemName: Self.arrow(model.step.instruction))
+            Image(systemName: checkFace == nil ? Self.arrow(model.step.instruction) : "checkmark.viewfinder")
                 .scaledFont(size: 28, weight: .bold, design: .rounded)
                 .foregroundColor(DSColor.accent)
                 .frame(width: 44)
-            Text(Self.text(model.step.instruction))
+            Text(instructionText)
                 .scaledFont(size: 20, weight: .heavy, design: .rounded)
                 .foregroundColor(DSColor.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -174,9 +198,15 @@ struct ScanView: View {
                 }
             }
             .accessibilityLabel(Text("Capture this side"))
-            Button("Enter colors manually") { flow.path.append(.review(manual: true)) }
-                .scaledFont(size: 16, weight: .semibold, design: .rounded)
-                .foregroundColor(DSColor.accentDark)
+            if checkFace != nil {
+                Button("Skip") { onSkip?() }
+                    .scaledFont(size: 16, weight: .semibold, design: .rounded)
+                    .foregroundColor(DSColor.accentDark)
+            } else {
+                Button("Enter colors manually") { flow.path.append(.review(manual: true)) }
+                    .scaledFont(size: 16, weight: .semibold, design: .rounded)
+                    .foregroundColor(DSColor.accentDark)
+            }
         }
     }
 
@@ -186,10 +216,17 @@ struct ScanView: View {
         guard s.count == 9 else { return }
         tip = ScanLighting.tip(s)
         guard stabilizer.feed(s, at: CACurrentMediaTime()) else { return }
-        if model.allowsAutoCapture(s) { capture(s) } else { stabilizer.reset() }
+        if checkFace != nil || model.allowsAutoCapture(s) { capture(s) } else { stabilizer.reset() }
     }
 
     private func capture(_ s: [CubeRGB]) {
+        if checkFace != nil {
+            guard s.count == 9 else { return }
+            deps.haptic(.capture)
+            onFace?(s)
+            stabilizer.reset()
+            return
+        }
         if model.capture(s) { deps.haptic(.capture) }
         stabilizer.reset()
     }

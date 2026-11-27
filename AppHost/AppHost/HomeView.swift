@@ -51,10 +51,12 @@ struct HomeView: View {
         case .guide:
             if let session = flow.session, let palette = flow.palette {
                 GuideView(session: session, palette: palette, prefs: deps.prefs,
-                          onFinish: { flow.didFinishGuide() })
+                          onFinish: { flow.didFinishGuide() }, onCheck: { flow.startCheck() })
             }
         case .done:
             GuideDoneView(flow: flow, deps: deps)
+        case .check:
+            GuideCheckView(flow: flow, deps: deps)
         }
     }
 

@@ -41,4 +41,6 @@ enum FlowRoute: Hashable {
     case mode
     case guide(GuideMode)
     case done
+    /// Quét kiểm tra một mặt sau một chặng của Teach me.
+    case check
 }

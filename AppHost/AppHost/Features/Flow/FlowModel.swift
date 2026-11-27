@@ -25,6 +25,8 @@ final class FlowModel: ObservableObject {
     @Published var alert: FlowAlert?
     /// Đang tìm lời giải Just solve it.
     @Published private(set) var isSolving = false
+    /// Đang quét lại cả khối sau quét kiểm tra lệch (kết quả kiểm tra ⇒ lập lại lời giải, không mở phiên mới).
+    @Published private(set) var isRechecking = false
 
     /// Chỉ nhận khối đang có; đẩy màn quét.
     func choose(_ p: FlowPuzzle) {
@@ -41,6 +43,10 @@ final class FlowModel: ObservableObject {
 
     /// Khối hợp lệ ⇒ màn chọn cách giải.
     func didReview(_ f: CubeFacelets, palette: CubePalette) {
+        if isRechecking, let old = session {
+            replan(from: f, palette: palette, old: old)
+            return
+        }
         cube = f
         self.palette = palette
         path.append(.mode)
@@ -74,6 +80,46 @@ final class FlowModel: ObservableObject {
         path.append(.guide(s.mode))
     }
 
+    /// Quét kiểm tra sau chặng.
+    func startCheck() {
+        guard path.last != .check else { return }
+        path.append(.check)
+    }
+
+    /// Mặt chụp khớp ⇒ sang chặng sau, về màn chỉ bước.
+    func checkMatched() {
+        session?.continueAfterStage()
+        if path.last == .check { path.removeLast() }
+    }
+
+    /// Bỏ qua kiểm tra (cả khi lệch).
+    func checkSkipped() { checkMatched() }
+
+    /// Lệch ⇒ quét lại cả khối.
+    func startRescan() {
+        isRechecking = true
+        path.append(.scan)
+    }
+
+    /// Lời giải mới từ trạng thái vừa quét lại. Màu nền giữ đúng MÀU THẬT của phiên (nhãn có thể đổi vì lần quét này
+    /// cầm khối khác hướng ⇒ tìm theo ΔE gần nhất); cùng nhãn ⇒ `replan` trên phiên cũ (giữ số bước, thời gian).
+    private func replan(from f: CubeFacelets, palette p: CubePalette, old: GuideSession) {
+        let target = (self.palette ?? p).rgb(old.base)
+        let base = CubeColor.all.min {
+            CubeColorMath.deltaE(p.rgb($0), target) < CubeColorMath.deltaE(p.rgb($1), target)
+        }!
+        cube = f
+        palette = p
+        let stages = SolverBeginner.solve(f, base: base)
+        if base == old.base {
+            old.replan(stages)
+        } else {
+            session = GuideSession(mode: .teach, stages: stages, base: base)
+        }
+        isRechecking = false
+        if let i = path.lastIndex(of: .guide(.teach)) { path = Array(path.prefix(through: i)) }
+    }
+
     /// Phiên xong ⇒ màn ăn mừng.
     func didFinishGuide() {
         guard session?.phase == .finished, path.last != .done else { return }
@@ -89,5 +135,6 @@ final class FlowModel: ObservableObject {
         palette = nil
         session = nil
         alert = nil
+        isRechecking = false
     }
 }

@@ -60,7 +60,7 @@ struct GuideView: View {
             }
         }
         .sheet(isPresented: $showNotation) { GuideNotationSheet() }
-        .onChange(of: session.phase) { _, phase in
+        .onChange(of: session.phase, initial: true) { _, phase in
             if phase == .finished { onFinish() }
         }
         .trackScreen("guide_steps")
