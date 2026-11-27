@@ -12,8 +12,7 @@ solve it → chỉ bước bằng khối 3D RealityKit; ~10 hoa văn; en + vi; i
 `docs/superpowers/specs/2026-11-27-cubingo-design.md` (+ bản phác `specs/assets/2026-11-27-cubingo/`).
 Kế tiếp: viết plan **Đợt A** (3×3 trọn vẹn) bằng skill writing-plans, rồi Đợt B (2×2, Patterns, tiếng Việt, iPad),
 Đợt C (store/ASO, web khi có tên miền, ra bản 1.0).
-Nợ: app sinh từ commit template `20b1621` (vá lint định danh, chưa tag) — khi template gắn `v0.6.1`, chạy
-`tools/template/sync_core.py sync` lên tag đó. Tên miền chưa mua (`cubingo.io`/`.co`/`getcubingo.com` còn trống
+Lõi template: `v0.6.1` (đã sync 2026-11-27). Nợ: tên miền chưa mua (`cubingo.io`/`.co`/`getcubingo.com` còn trống
 2026-11-27) ⇒ `web.host_prod` còn giữ chỗ. Remote chưa tạo/push (cổng user). Project Firebase chưa tạo.
 
 ## Nợ đã biết
