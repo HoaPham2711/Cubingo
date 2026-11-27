@@ -476,8 +476,8 @@
     "web/tsconfig.base.json": "ad2ad9806f5d0cff725d5eff27d2d61e6668ea9862b800dd5d1614f9b453cf95"
   },
   "template": {
-    "commit": "20b1621358a91d40db40cd2b5f45fbe3688d264c",
+    "commit": "195c2269350ff5c27690a0c27b4b21f6e7580b1d",
     "source": "https://github.com/HoaPham2711/ios-app-factory.git",
-    "tag": null
+    "tag": "v0.6.1"
   }
 }
