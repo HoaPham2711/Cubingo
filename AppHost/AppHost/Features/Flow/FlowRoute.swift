@@ -34,9 +34,6 @@ enum FlowPuzzle: String, CaseIterable {
     }
 }
 
-/// Chế độ chỉ bước — Task 14 chuyển về `Features/Guide/`.
-enum GuideMode: Hashable { case teach, quick }
-
 /// Các màn của luồng một chiều, đẩy trên `NavigationStack` gốc (màn chọn khối).
 enum FlowRoute: Hashable {
     case scan
