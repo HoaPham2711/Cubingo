@@ -28,6 +28,10 @@ struct AppHostApp: App {
     @StateObject private var tabRouter = AppTabRouter()
     /// Link vào app (Universal Link) đã nhận, chờ khung chính mở — xem `receiveLink`.
     @State private var pendingLink: AppLink?
+    /// Cài đặt + luồng của Cubingo — dựng MỘT lần ở đây, truyền xuống qua `FlowDependencies`.
+    @StateObject private var prefs: PrefsStore
+    @StateObject private var flow = FlowModel()
+    private let flowDeps: FlowDependencies
     @Environment(\.scenePhase) private var scenePhase
 
     /// Host unit test / route preview không cần sản phẩm ⇒ không chạm StoreKit thật.
@@ -73,6 +77,12 @@ struct AppHostApp: App {
         _reviewScheduler = State(initialValue: ReviewScheduler(prompter: prompter, isQuiet: ReviewScheduler.liveIsQuiet,
                                                                present: {}))
         feedbackTransport = Self.makeFeedbackTransport(config: config)
+
+        let prefs = PrefsStore(defaults: .standard)
+        _prefs = StateObject(wrappedValue: prefs)
+        flowDeps = FlowDependencies(prefs: prefs, haptic: FlowHaptics.live(prefs: prefs),
+                                    quickSolver: SolverQuick(tables: { try SolverKociembaTables.load(bundle: .main) }),
+                                    cameraAuth: Self.cameraAuth)
     }
 
     var body: some Scene {
@@ -84,7 +94,8 @@ struct AppHostApp: App {
                 AppShellView(config: config, entitlements: entitlements, updateChecker: updateChecker,
                              reviewPrompter: reviewPrompter, reviewScheduler: reviewScheduler, whatsNew: whatsNew,
                              tabRouter: tabRouter, feedbackTransport: feedbackTransport, pendingLink: $pendingLink,
-                             onAppLink: { AppLinkActions.perform($0, tabs: tabRouter) })
+                             onAppLink: { AppLinkActions.perform($0, tabs: tabRouter) },
+                             flow: flow, deps: flowDeps)
             }, willFinishOnboarding: {
                 // Cài mới đã có tour giới thiệu ⇒ không hiện What's New (ghi lastSeen TRƯỚC khi cờ đổi).
                 whatsNew.onboardingFinished()
@@ -130,6 +141,15 @@ struct AppHostApp: App {
     /// link khi sheet đóng (link mới nhất thắng); đang onboarding ⇒ khung chính mở link khi hiện.
     private func receiveLink(_ url: URL) {
         AppLinkRouter.route(url, expectedHost: config.webHost, whatsNew: whatsNew) { pendingLink = $0 }
+    }
+
+    /// Simulator không có camera ⇒ nguồn giả của màn quét (quyền luôn có).
+    private static var cameraAuth: ScanCameraAuth {
+        #if targetEnvironment(simulator)
+        return ScanPreviewSeed.cameraAuth
+        #else
+        return .live
+        #endif
     }
 
     // MARK: - Khối tuỳ chọn Web API (cờ build từ `[features] web_api`, xem Features.generated.yml)

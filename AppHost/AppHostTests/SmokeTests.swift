@@ -1,4 +1,5 @@
 @testable import AppHost
+import SwiftUI
 import XCTest
 
 final class SmokeTests: XCTestCase {
@@ -30,7 +31,8 @@ final class SmokeTests: XCTestCase {
     func testRoutePreviewCuaApp() {
         // Sáu route của khung luôn có; route riêng của tính năng (nếu có) đứng sau.
         let shellRoutes = ["home", "onboarding", "settings", "paywall", "whatsNew", "feedback"]
-        XCTAssertEqual(AppPreview.allCases.map(\.rawValue), shellRoutes)
+        let featureRoutes = ["scan", "review", "mode", "guide", "guideStageDone", "done"]
+        XCTAssertEqual(AppPreview.allCases.map(\.rawValue), shellRoutes + featureRoutes)
         XCTAssertEqual(AppPreview.allCases.filter(\.isOnboarding), [.onboarding])
         XCTAssertEqual(AppPreview.routesNeedingStore, [])
         XCTAssertEqual(AppPreview.settings.initialTab, .settings)
@@ -73,14 +75,16 @@ final class SmokeTests: XCTestCase {
         XCTAssertNil(AppPaywall.content(config: AppConfig(info: [:])).termsURL)
     }
 
-    /// Tour: mở đầu bằng Welcome, kết bằng Ready. Xem lại bỏ Welcome nhưng KHÔNG rỗng ⇒ hàng "Show app tour" có mặt.
-    func testTourXemLaiKhongRong() {
-        let first = AppOnboarding.flow(.firstRun).pages
-        XCTAssertEqual(first.first, .welcome)
-        XCTAssertEqual(first.last, .ready)
-        let replay = AppOnboarding.flow(.replay)
-        XCTAssertFalse(replay.isEmpty)
-        XCTAssertFalse(replay.pages.contains(.welcome))
+    /// Cubingo: giao diện sáng, nhấn cam #FF7A00 (spec mục 7).
+    func testThemeSangCamCuaCubingo() {
+        XCTAssertEqual(AppTheme.theme.colorScheme, .light)
+        XCTAssertEqual(AppTheme.theme.palette.accent, Color(hex: 0xFF7A00))
+    }
+
+    /// Không có tour: mở app vào thẳng màn chọn khối; luồng xem lại cũng rỗng ⇒ Settings ẩn hàng "Show app tour".
+    func testMoAppVaoThangManChonKhoi() {
+        XCTAssertTrue(AppOnboarding.flow(.firstRun).isEmpty)
+        XCTAssertTrue(AppOnboarding.flow(.replay).isEmpty)
     }
 
     /// Nút thẻ What's New với khoá không có đích: resolver trả `nil`, runner không đổi tab.

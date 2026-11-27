@@ -9,6 +9,8 @@ import SwiftUI
 /// seed riêng của từng tính năng).
 enum AppPreview: String, UIPreviewRoute {
     case home, onboarding, settings, paywall, whatsNew, feedback
+    // Route của tính năng (sau sáu route khung).
+    case scan, review, mode, guide, guideStageDone, done
 
     var isOnboarding: Bool {
         switch self {
@@ -37,6 +39,14 @@ enum AppPreview: String, UIPreviewRoute {
     /// `.storekit` gắn ở Run action của scheme KHÔNG được áp cho app do XCUITest mở qua `xcodebuild test` (đã thử:
     /// paywall báo "Could not load purchase options"), còn sandbox thật bật hộp thoại đăng nhập che màn.
     static let routesNeedingStore: Set<String> = []
+
+    /// Dựng sẵn trạng thái luồng cho route của tính năng (chỉ Simulator; device không làm gì).
+    @MainActor
+    static func prepareFlow(_ flow: FlowModel) {
+        #if targetEnvironment(simulator)
+        AppPreviewSeed.prepareFlow(flow)
+        #endif
+    }
 }
 
 #if targetEnvironment(simulator)
@@ -64,6 +74,30 @@ enum AppPreviewSeed {
     static func incomingLink(webHost: String?) -> URL? {
         guard let webHost, !webHost.isEmpty else { return nil }
         return nil
+    }
+
+    /// Đưa luồng tới màn của route.
+    @MainActor
+    static func prepareFlow(_ flow: FlowModel) {
+        guard flow.path.isEmpty else { return }
+        switch AppPreview.current {
+        case .scan: flow.choose(.cube3)
+        case .review:
+            flow.choose(.cube3)
+            flow.didScan(ScanPreviewSeed.scanResultWithMistake)
+        case .mode, .guide, .guideStageDone, .done:
+            flow.choose(.cube3)
+            flow.didReview(ScanPreviewSeed.state, palette: .manualDefault)
+            switch AppPreview.current {
+            case .guide: flow.begin(GuidePreviewSeed.midMiddleLayer())
+            case .guideStageDone: flow.begin(GuidePreviewSeed.stageDone())
+            case .done:
+                flow.begin(GuidePreviewSeed.finishedQuick())
+                flow.didFinishGuide()
+            default: break
+            }
+        default: break
+        }
     }
 
     @MainActor
