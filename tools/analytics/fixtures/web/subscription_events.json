@@ -1,0 +1,15 @@
+{
+ "items": [
+  {"notification_uuid": "u-01", "type": "SUBSCRIBED", "subtype": null, "environment": "Production", "signed_date": 9000000001, "product_id": "com.example.app.pro.monthly", "original_tx_id": "tx-aaa", "price": 4990, "currency": "USD", "storefront": "USA"},
+  {"notification_uuid": "u-02", "type": "SUBSCRIBED", "subtype": null, "environment": "Production", "signed_date": 9000000002, "product_id": "com.example.app.pro.yearly", "original_tx_id": "tx-bbb", "price": 39990, "currency": "USD", "storefront": "USA"},
+  {"notification_uuid": "u-03", "type": "SUBSCRIBED", "subtype": null, "environment": "Production", "signed_date": 9000000003, "product_id": "com.example.app.pro.monthly", "original_tx_id": "tx-ccc", "price": 4990, "currency": "USD", "storefront": "USA"},
+  {"notification_uuid": "u-04", "type": "SUBSCRIBED", "subtype": null, "environment": "Production", "signed_date": 9000000004, "product_id": "com.example.app.pro.monthly", "original_tx_id": "tx-ddd", "price": 4990, "currency": "USD", "storefront": "USA"},
+  {"notification_uuid": "u-05", "type": "SUBSCRIBED", "subtype": null, "environment": "Sandbox", "signed_date": 9000000005, "product_id": "com.example.app.pro.monthly", "original_tx_id": "tx-sbx", "price": 4990, "currency": "USD", "storefront": "USA"},
+  {"notification_uuid": "u-06", "type": "TEST", "subtype": null, "environment": "Production", "signed_date": 9000000006, "product_id": null, "original_tx_id": "tx-test", "price": null, "currency": null, "storefront": null},
+  {"notification_uuid": "u-07", "type": "DID_RENEW", "subtype": null, "environment": "Production", "signed_date": 9000000007, "product_id": "com.example.app.pro.monthly", "original_tx_id": "tx-aaa", "price": 4990, "currency": "USD", "storefront": "USA"},
+  {"notification_uuid": "u-08", "type": "DID_RENEW", "subtype": null, "environment": "Production", "signed_date": 9000000008, "product_id": "com.example.app.pro.yearly", "original_tx_id": "tx-bbb", "price": 39990, "currency": "USD", "storefront": "USA"},
+  {"notification_uuid": "u-09", "type": "DID_CHANGE_RENEWAL_STATUS", "subtype": "AUTO_RENEW_DISABLED", "environment": "Production", "signed_date": 9000000009, "product_id": "com.example.app.pro.monthly", "original_tx_id": "tx-aaa", "price": null, "currency": null, "storefront": null},
+  {"notification_uuid": "u-10", "type": "EXPIRED", "subtype": "VOLUNTARY", "environment": "Production", "signed_date": 9000000010, "product_id": "com.example.app.pro.monthly", "original_tx_id": "tx-aaa", "price": null, "currency": null, "storefront": null},
+  {"notification_uuid": "u-11", "type": "REFUND", "subtype": null, "environment": "Production", "signed_date": 9000000011, "product_id": "com.example.app.pro.monthly", "original_tx_id": "tx-ccc", "price": 4990, "currency": "USD", "storefront": "USA"}
+ ]
+}

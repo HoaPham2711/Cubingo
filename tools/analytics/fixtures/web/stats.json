@@ -1,0 +1,7 @@
+{
+ "days": 30,
+ "pages": [{"page": "/", "views": 120}, {"page": "/privacy/", "views": 15}],
+ "referrers": [{"domain": "example.org", "n": 9}],
+ "countries": [{"country": "US", "n": 80}, {"country": "VN", "n": 40}],
+ "devices": [{"device": "mobile", "n": 100}, {"device": "desktop", "n": 35}]
+}

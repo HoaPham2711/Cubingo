@@ -1,0 +1,44 @@
+# Tên chỉ được tồn tại ở build INTERNAL — HAI loại, mỗi loại một mục (ruling R18, Task 15 của Plan 2):
+#
+#   [binary]       Tên TYPE (struct/class/enum/actor/protocol) khai trong vùng `#if INTERNAL`. Metadata reflection
+#                  của Swift giữ tên type trong binary ⇒ verify_release_clean.sh grep binary Release tìm từng tên
+#                  (thấy ⇒ FAIL), và selfcheck đối chứng dương: MỌI tên ở đây PHẢI tìm thấy trong .app Internal
+#                  (`verify_release_clean.sh --expect-debug-symbols`) — tên bị optimizer bỏ hay gõ sai là "mục vô
+#                  tác dụng", không được nằm đây cho an tâm giả.
+#   [source-only]  Tên HÀM/BIẾN nguy hiểm (lối bật Pro, đặt tay hạn mức) — ghim bằng comment
+#                  `// debug-symbol: required` NGAY DÒNG TRÊN khai báo, trong `#if INTERNAL`. Tên hàm bị strip khỏi
+#                  binary (đo ở Task 14: không có trong cả binary Internal) ⇒ grep binary không chứng minh được gì;
+#                  bảo vệ thật là `#if INTERNAL` + tools/release/lint_debug_symbols.py (tên chỉ được khai trong vùng
+#                  INTERNAL). verify_release_clean.sh KHÔNG soi mục này ở binary.
+#
+# Cú pháp: dòng `[binary]` / `[source-only]` mở mục; mỗi dòng sau là một chuỗi cố định (không phải regex); dòng trống
+# và dòng bắt đầu bằng '#' bị bỏ qua. Tên đứng trước mọi mục, mục lạ, tên trùng ⇒ lỗi (lint rc 1, cổng FAIL).
+# Mục [binary] không có tên nào (hoặc thiếu file) ⇒ verify_release_clean.sh FAIL (không được qua trống).
+#
+# File này CHỈ giữ tên của LÕI (Core/, CoreOptional/) và do template sở hữu — app KHÔNG sửa nó. Tên của app (type/hàm
+# trong AppHost/AppHost/) ghi ở AppHost/Config/debug_symbols.app.txt, cùng định dạng hai mục. Cổng 1 và lint đọc HỢP
+# của hai file; một tên có ở cả hai ⇒ lỗi. lint_debug_symbols.py bắt quên, tên ở sai mục, tên mồ côi (không còn khai /
+# khai ngoài #if INTERNAL).
+
+[binary]
+InternalDebugMarkerView
+AppLogFile
+# Khối Internal (Core/Internal): cử chỉ nhấn giữ mở sheet debug, viewer log, giả lập lần đầu, bảng thử luật review.
+InternalLongPressSheet
+LogFileView
+# InternalLogText chỉ được code debug KHÁC (LogFileView) gọi: một bản Release làm rò nó vẫn có thể dead-strip nó
+# khỏi binary nên cổng 1 không thấy — với những tên như vậy chỗ gác thật là lint nguồn (cổng 1b, lint_debug_symbols.py).
+InternalLogText
+FirstLaunchSimulation
+ReviewPromptDebugSection
+# Purchases: override Free/Pro cho máy test — bản Store mà còn là lỗ hổng mở Pro.
+InternalProOverride
+
+[source-only]
+# Purchases: lối bật Pro không trả tiền (Core/Purchases/Entitlements.swift).
+setInternalProOverride
+setProForInternalTesting
+# Purchases: đặt tay bộ đếm lượt free (Core/Purchases/FreeUseLedger.swift, bảng debug).
+debugSetUsed
+# Purchases: xoá bộ đếm lượt free trong Keychain (Core/Purchases/KeychainCounterStore.swift, chỉ test gọi).
+deleteForTesting

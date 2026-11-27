@@ -1,0 +1,22 @@
+{
+  "schema": {"fields": [
+    {"name": "d", "type": "STRING"},
+    {"name": "reported_at", "type": "STRING"},
+    {"name": "u", "type": "STRING"},
+    {"name": "v", "type": "STRING"},
+    {"name": "model", "type": "STRING"},
+    {"name": "os", "type": "STRING"},
+    {"name": "country", "type": "STRING"},
+    {"name": "env", "type": "STRING"},
+    {"name": "internal", "type": "STRING"},
+    {"name": "fatal", "type": "INTEGER"},
+    {"name": "before", "type": "RECORD", "mode": "REPEATED", "fields": [
+      {"name": "t", "type": "STRING"}, {"name": "n", "type": "STRING"}, {"name": "screen", "type": "STRING"}]}
+  ]},
+  "rows": [
+    {"f": [{"v": "20261102"}, {"v": "2026-11-02 09:15"}, {"v": "nguoi-a"}, {"v": "1.2.3"}, {"v": "iPhone17,1"},
+           {"v": "iOS 26.1"}, {"v": "Germany"}, {"v": "production"}, {"v": null}, {"v": "1"},
+           {"v": [{"v": {"f": [{"v": "09:14:58"}, {"v": "mo_man"}, {"v": "Items"}]}}]}]}
+  ],
+  "jobComplete": true
+}

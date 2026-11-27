@@ -1,0 +1,10 @@
+# Header cho asset tĩnh (Workers static assets). Phản hồi do Worker dựng (AASA, /api/*) không đi qua file này.
+/*
+  Content-Security-Policy: default-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Strict-Transport-Security: max-age=31536000
+
+# Script đo: cache ngắn để bản sửa tới khách trong 1 giờ.
+/m.js
+  Cache-Control: public, max-age=3600

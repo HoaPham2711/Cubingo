@@ -1,0 +1,7 @@
+# SINH TỰ ĐỘNG từ app.config.toml — không sửa tay. Chạy: python3 tools/common/appconfig.py render
+# AppHost/project.yml include file này; `entitlements.properties` ở đây gộp với khai báo của project.yml.
+targets:
+  AppHost:
+    entitlements:
+      properties:
+        com.apple.developer.associated-domains: ["applinks:$(APP_WEB_HOST)"]

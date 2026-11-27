@@ -1,0 +1,44 @@
+// SINH bởi `python3 tools/common/appconfig.py render` từ app.config.toml — không sửa tay (sửa app.config.toml rồi render).
+{
+  "name": "cubingo-site",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-08-22",
+  "workers_dev": false,
+  "preview_urls": false,
+  "assets": {
+    "directory": "public",
+    "binding": "ASSETS",
+    "run_worker_first": [
+      "/.well-known/*",
+      "/api/*"
+    ],
+    "not_found_handling": "404-page"
+  },
+  "vars": {
+    "APP_IDS": "Q73A5F75B4.com.vimindtech.cubingo",
+    "APP_PATHS": "[]",
+    "NOINDEX": "0"
+  },
+  "env": {
+    "dev": {
+      "name": "cubingo-site-dev",
+      "routes": [
+        {
+          "pattern": "dev.example.com",
+          "custom_domain": true
+        }
+      ],
+      "assets": {
+        "directory": "public",
+        "binding": "ASSETS",
+        "run_worker_first": true,
+        "not_found_handling": "404-page"
+      },
+      "vars": {
+        "APP_IDS": "Q73A5F75B4.com.vimindtech.cubingo.internal",
+        "APP_PATHS": "[]",
+        "NOINDEX": "1"
+      }
+    }
+  }
+}

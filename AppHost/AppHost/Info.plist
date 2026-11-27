@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>AppBundleIDInternal</key>
+	<string>$(APP_BUNDLE_ID_INTERNAL)</string>
+	<key>AppStoreID</key>
+	<string>$(APP_STORE_ID)</string>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleDisplayName</key>
+	<string>$(APP_DISPLAY_NAME)</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(APP_MARKETING_VERSION)</string>
+	<key>CFBundleVersion</key>
+	<string>$(APP_BUILD_NUMBER)</string>
+	<key>FeatureAppleAds</key>
+	<string>$(APP_FEATURE_APPLE_ADS)</string>
+	<key>FeaturePaywall</key>
+	<string>$(APP_FEATURE_PAYWALL)</string>
+	<key>FeatureWebAPI</key>
+	<string>$(APP_FEATURE_WEB_API)</string>
+	<key>GOOGLE_ANALYTICS_DEFAULT_ALLOW_AD_PERSONALIZATION_SIGNALS</key>
+	<false/>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>ProductIDs</key>
+	<string>$(APP_PRODUCT_IDS)</string>
+	<key>SupportEmail</key>
+	<string>$(APP_SUPPORT_EMAIL)</string>
+	<key>UILaunchScreen</key>
+	<dict/>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>WebHost</key>
+	<string>$(APP_WEB_HOST)</string>
+</dict>
+</plist>

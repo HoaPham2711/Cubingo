@@ -1,0 +1,6 @@
+# Phụ thuộc npm + trạng thái cục bộ của wrangler (account id, cache đăng nhập, D1 cục bộ, build tạm).
+# KHÔNG version: gắn với máy và tài khoản của từng người.
+node_modules/
+.wrangler/
+# Secret cục bộ của `wrangler dev` (ADMIN_TOKEN…) — KHÔNG BAO GIỜ commit.
+.dev.vars*

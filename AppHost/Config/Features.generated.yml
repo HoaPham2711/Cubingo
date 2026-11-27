@@ -1,0 +1,3 @@
+# SINH TỰ ĐỘNG từ app.config.toml — không sửa tay. Chạy: python3 tools/common/appconfig.py render
+# AppHost/project.yml include file này; mảng sources/dependencies ở đây được nối thêm vào target.
+{}

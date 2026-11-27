@@ -1,0 +1,6 @@
+{
+  "_doc": "Mặc định chung của crash_watch.py. recent_days = cửa sổ 'gần đây' (ngày) cho bảng GA4 và cho issue crash mới. issues = issue đang theo dõi [{issue_id, name, status: watching|closed, known_devices: [{model, os}]}]; reviewed = máy đã xem crash tới ngày `through` [{model, os, through}]. File này thuộc lõi đồng bộ — danh sách theo dõi riêng của app đặt ở file khác và trỏ CRASH_WATCH_FILE tới nó. Chỉ chứa mã model + iOS, không dữ liệu người dùng.",
+  "recent_days": 7,
+  "issues": [],
+  "reviewed": []
+}

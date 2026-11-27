@@ -1,0 +1,56 @@
+// SINH bởi `python3 tools/common/appconfig.py render` từ app.config.toml — không sửa tay (sửa app.config.toml rồi render).
+{
+  "name": "cubingo-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-22",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "workers_dev": false,
+  "preview_urls": false,
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "cubingo",
+      "database_id": "TODO-d1-id",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "triggers": {
+    "crons": [
+      "17 3 * * *"
+    ]
+  },
+  "vars": {
+    "ASSN_BUNDLE_ID": "com.vimindtech.cubingo",
+    "ASSN_ENVIRONMENTS": "Production",
+    "APP_CHECK_PROJECTS": "",
+    "APP_CHECK_REQUIRED": "1",
+    "PUBLIC_ORIGIN": "https://example.com"
+  },
+  "env": {
+    "dev": {
+      "name": "cubingo-api-dev",
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "cubingo-dev",
+          "database_id": "TODO-d1-id",
+          "migrations_dir": "migrations"
+        }
+      ],
+      "triggers": {
+        "crons": [
+          "17 3 * * *"
+        ]
+      },
+      "vars": {
+        "ASSN_BUNDLE_ID": "com.vimindtech.cubingo",
+        "ASSN_ENVIRONMENTS": "Sandbox",
+        "APP_CHECK_PROJECTS": "",
+        "APP_CHECK_REQUIRED": "0",
+        "PUBLIC_ORIGIN": "https://dev.example.com"
+      }
+    }
+  }
+}

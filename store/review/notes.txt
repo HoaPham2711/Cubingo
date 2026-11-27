@@ -1,0 +1,1 @@
+TEMPLATE-PLACEHOLDER — write the App Review notes here (max 384 characters): how to reach the main feature, a test account if one is needed, and anything that depends on hardware or a purchase.

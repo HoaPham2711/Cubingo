@@ -1,0 +1,12 @@
+{
+  "dimensionHeaders": [{"name": "date"}],
+  "metricHeaders": [{"name": "activeUsers", "type": "TYPE_INTEGER"}, {"name": "newUsers", "type": "TYPE_INTEGER"},
+                    {"name": "userEngagementDuration", "type": "TYPE_SECONDS"}],
+  "rows": [
+    {"dimensionValues": [{"value": "20261101"}],
+     "metricValues": [{"value": "12"}, {"value": "5"}, {"value": "340.5"}]},
+    {"dimensionValues": [{"value": "20261102"}],
+     "metricValues": [{"value": "9"}, {"value": "2"}, {"value": "120"}]}
+  ],
+  "rowCount": 2
+}

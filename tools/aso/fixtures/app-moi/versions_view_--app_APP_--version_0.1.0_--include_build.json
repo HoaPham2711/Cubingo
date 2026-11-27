@@ -1,0 +1,18 @@
+{
+  "response": {
+    "data": {
+      "type": "appStoreVersions",
+      "id": "phien-ban-gia-0001",
+      "attributes": {
+        "platform": "IOS",
+        "versionString": "0.1.0",
+        "appVersionState": "PREPARE_FOR_SUBMISSION"
+      },
+      "relationships": {
+        "build": {
+          "data": null
+        }
+      }
+    }
+  }
+}

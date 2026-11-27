@@ -1,0 +1,11 @@
+.temp/
+*.xcodeproj
+xcuserdata/
+DerivedData/
+__pycache__/
+.DS_Store
+*.p8
+node_modules/
+.claude/worktrees/
+.claude/settings.local.json
+.factory/missions/*/artifacts/

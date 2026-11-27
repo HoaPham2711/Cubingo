@@ -1,0 +1,11 @@
+# Danh sách tên debug CỦA APP (app sở hữu — template không ghi đè). Cùng định dạng và cùng luật với
+# tools/release/debug_symbols.txt (danh sách của lõi, xem đầu file đó):
+#   [binary]       tên TYPE khai trong `#if INTERNAL` ở AppHost/AppHost/ — cổng 1 của verify_release_clean.sh grep binary Release.
+#   [source-only]  tên HÀM/BIẾN nguy hiểm ghim bằng `// debug-symbol: required` ngay dòng trên khai báo (trong `#if INTERNAL`).
+# Tên của lõi KHÔNG ghi ở đây; một tên có ở cả hai file ⇒ lỗi. Thiếu file này = danh sách rỗng.
+
+[binary]
+# App giữ chỗ (AppHost/AppHost/Internal/AppInternalEntry.swift): nội dung sheet/section công cụ nội bộ.
+AppDebugTools
+
+[source-only]

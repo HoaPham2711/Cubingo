@@ -1,0 +1,291 @@
+#!/bin/bash
+# Cổng nhanh trước mỗi commit — chỉ chạy lint TĨNH (không build): ~0,5 s cho commit file app; ~10 s khi commit đụng
+# `.claude/` hoặc `tools/factory/` (chạy unittest tools/factory).
+# Bật cho clone mới:  git config core.hooksPath .githooks
+#
+# Khối đỏ ⇒ sửa theo thông báo của khối đó; không bỏ qua hook (agent không bao giờ dùng `--no-verify`; ở app khối 0 là
+# cổng lõi). Hook để biết sớm, không phải chỗ dựa duy nhất (cổng ra bản bắt lại).
+set -u
+REPO=$(git rev-parse --show-toplevel)
+
+# (0) Lõi không lệch template — chỉ ở APP. Nhận diện DƯƠNG là TEMPLATE: `new_app.py` của template (thư mục tools/template) được track trong
+# HEAD — file lớp template_only, không bao giờ có ở app. MỌI repo khác là APP. Loại repo do HEAD quyết định, KHÔNG do
+# index đang commit: nếu index được hỏi, một commit "gỡ core.lock + thêm new_app.py rỗng" tự biến app thành "template"
+# và tắt cổng ngay trong chính commit đó. Chỉ khi HEAD chưa có (commit đầu của một repository) mới xét index — và khi
+# đó repo đã có commit ở ref khác / trong reflog (nhánh mồ côi `checkout --orphan`) mà lịch sử từng có core.lock thì vẫn là app.
+# Quyết định bằng GIT THUẦN ngay tại đây (không dựa tool Python mà app có thể đã xoá), viết MỘT lần ở `repo_kind`.
+# Bất kể loại repo: HEAD có core.lock mà commit này không có ⇒ chặn (không commit nào qua hook làm mất lock).
+# Ở app: core.lock phải có trong commit (index), `tools/template/manifest.py` + `sync_core.py` phải còn — thiếu (kể cả
+# đã bị commit gỡ bằng `--no-verify`) ⇒ chặn kèm cách khôi phục; app không được track file đánh dấu của template.
+# `git` ở đây dùng đúng index hook được giao (GIT_INDEX_FILE thừa hưởng) ⇒ đúng cả `commit -a` / `commit <file>`.
+# Mọi file lớp đồng bộ phải giống hệt digest trong core.lock (M/D) và không có file mới trong thư mục lớp đồng bộ (A).
+# So NỘI DUNG SẼ ĐƯỢC COMMIT: file, lock, manifest đọc từ index git đang commit (`--staged` giữ GIT_INDEX_FILE của hook),
+# nên commit do lệnh đồng bộ tạo (file + lock mới cùng stage) qua; commit đầu của app mới (HEAD chưa có) cũng vậy.
+MARKER="tools/template/new_app.py"
+in_index() { git -C "$REPO" ls-files --error-unmatch -- ":(literal)$1" >/dev/null 2>&1; }
+in_head() { git -C "$REPO" cat-file -e "HEAD:$1" 2>/dev/null; }
+repo_kind() {     # in "template" | "app"
+  local seen
+  if git -C "$REPO" rev-parse --verify -q "HEAD^{commit}" >/dev/null 2>&1; then
+    if in_head "$MARKER"; then echo template; else echo app; fi
+  # HEAD chưa có: mọi ref + reflog (nhánh mồ côi rồi xoá nhánh cũ vẫn còn reflog của HEAD); git log lỗi ⇒ coi là app.
+  elif in_index "$MARKER" \
+       && seen=$(git -C "$REPO" log -1 --all --reflog --full-history --format=%H -- core.lock 2>/dev/null) \
+       && [ -z "$seen" ]; then
+    echo template
+  else
+    echo app
+  fi
+}
+LOCK_HELP="khôi phục: git restore --staged --worktree core.lock (vừa gỡ), hoặc từ lịch sử: git log --diff-filter=D --oneline -- core.lock rồi git checkout <commit>^ -- core.lock, hoặc đồng bộ lại từ template"
+KIND=$(repo_kind)
+if in_head "core.lock" && ! in_index "core.lock"; then
+  echo "pre-commit: HEAD có core.lock nhưng commit này không có — lock đã bị gỡ; khôi phục: git restore --staged" \
+       "--worktree core.lock" >&2
+  exit 1
+fi
+# Template không được track core.lock: `git add -A` lỡ stage một lock lạc thì từ đó repo mang lock như app. Không dùng
+# .gitignore (file lớp seed — app nào cũng nhận, mà app thì phải track lock).
+if [ "$KIND" = template ] && in_index "core.lock"; then
+  if in_head "core.lock"; then
+    # HEAD có cả hai dấu — chỉ tới được bằng một commit `--no-verify`; hook không tự gỡ (lock ở lại thì là "template
+    # track lock", gỡ lock thì bị khối trên chặn) ⇒ nói rõ lối ra thay vì hai thông báo chỉ ngược nhau.
+    echo "pre-commit: HEAD track CẢ $MARKER (dấu template) LẪN core.lock (dấu app) — trạng thái chỉ có sau một commit" \
+         "--no-verify, hook không gỡ được. Là app ⇒ gỡ file đánh dấu (git rm $MARKER); là template ⇒ gỡ lock" \
+         "(git rm --cached core.lock); khối này không có lối qua cho commit đó — NGƯỜI tự commit riêng thay đổi ấy ngoài" \
+         "hook (agent dừng và báo user)." >&2
+  else
+    echo "pre-commit: core.lock chỉ có ở app — repo template không được track file này (git rm --cached core.lock)." >&2
+  fi
+  exit 1
+fi
+if [ "$KIND" = app ]; then
+  for tool in tools/template/manifest.py tools/template/sync_core.py; do
+    if [ ! -f "$REPO/$tool" ]; then
+      echo "pre-commit: đây là app (HEAD không có $MARKER) nhưng thiếu $tool (file lớp đồng bộ, cổng lệch lõi" \
+           "cần nó) — khôi phục: git restore --staged --worktree $tool, hoặc từ lịch sử (git log --diff-filter=D --oneline" \
+           "-- $tool rồi git checkout <commit>^ -- $tool), hoặc đồng bộ lại từ template" >&2
+      exit 1
+    fi
+  done
+  # File đánh dấu là lớp template_only trong manifest ⇒ luật A của sync_core không thấy nó; chặn ngay tại đây, nếu
+  # không commit kế tiếp coi repo là "template".
+  if in_index "$MARKER"; then
+    echo "pre-commit: đây là app (HEAD không có $MARKER) — file đó chỉ có ở template (dấu nhận diện template), app" \
+         "không được track nó: git rm --cached $MARKER" >&2
+    exit 1
+  fi
+  if ! in_index "core.lock"; then
+    echo "pre-commit: đây là app (HEAD không có $MARKER) nhưng commit này không có core.lock — lock đã bị gỡ" \
+         "(nếu đây là template: file $MARKER đã bị gỡ, khôi phục nó); $LOCK_HELP" >&2
+    exit 1
+  fi
+  SYNC_OUT=$(python3 "$REPO/tools/template/sync_core.py" check --staged --root "$REPO" 2>&1)
+  SYNC_RC=$?
+  case "$SYNC_RC" in
+    0) ;;
+    1)
+      echo "$SYNC_OUT" | grep -E '^[MDA] ' | sed 's/^/  /' >&2
+      echo "" >&2
+      if echo "$SYNC_OUT" | grep -qE '^[MD] '; then
+        echo "File này do template sở hữu — sửa ở template rồi chạy tools/template/sync_core.py sync --to <tag>" >&2
+      fi
+      if echo "$SYNC_OUT" | grep -qE '^A '; then
+        echo "File mới nằm trong thư mục do template sở hữu — chuyển nó sang chỗ của app (vd AppHost/…, tools/app/…," \
+             "docs/lessons-learned/app/…) hoặc thêm nó vào template" >&2
+      fi
+      exit 1 ;;
+    *)
+      echo "$SYNC_OUT" >&2
+      echo "" >&2
+      echo "pre-commit: core.lock bị gỡ, hỏng hoặc không đọc được (rc=$SYNC_RC) — xem dòng FAIL: ở trên." >&2
+      exit 1 ;;
+  esac
+fi
+
+# (1) Luôn chạy: file sinh ra (xcconfig, Features.generated.yml, privacy manifest, entitlements) phải khớp app.config.toml, và không literal
+# định danh lọt vào file. Phải kiểm NỘI DUNG SẼ ĐƯỢC COMMIT (index), không phải working tree: `check` đọc working
+# tree, nên trước hết các file đó không được còn thay đổi chưa stage (kể cả file sinh ra chưa từng add) — khi đó
+# working tree == index và `check` nói đúng về commit.
+# (Sửa config + render mà chỉ `git add app.config.toml` từng lọt qua: commit mang build mới, xcconfig build cũ.)
+GENERATED="app.config.toml AppHost/Config/Identity.xcconfig AppHost/Config/Features.generated.yml AppHost/Config/Entitlements.generated.yml AppHost/Config/PrivacyInfo.template.xcprivacy AppHost/AppHost/PrivacyInfo.xcprivacy AppHost/AppHost/AppHost.entitlements"
+# shellcheck disable=SC2086
+if ! git -C "$REPO" diff --quiet -- $GENERATED \
+   || [ -n "$(git -C "$REPO" ls-files --others --exclude-standard -- $GENERATED)" ]; then
+  echo "pre-commit: một trong $GENERATED còn thay đổi chưa stage — hook kiểm đúng nội dung sẽ commit nên cần" \
+       "stage tất cả (git add $GENERATED) hoặc bỏ thay đổi chưa stage đó." >&2
+  exit 1
+fi
+python3 "$REPO/tools/common/appconfig.py" check
+CHECK_RC=$?
+case "$CHECK_RC" in
+  0) ;;
+  1)
+    echo "" >&2
+    echo "pre-commit: file sinh ra (Identity.xcconfig / Features.generated.yml / Entitlements.generated.yml / PrivacyInfo.xcprivacy / AppHost.entitlements) đã cũ so với app.config.toml — chạy 'python3 tools/common/appconfig.py render' rồi git add chúng." >&2
+    exit 1 ;;
+  *)
+    echo "" >&2
+    echo "pre-commit: app.config.toml hỏng (rc=$CHECK_RC) — xem lỗi ở trên (dòng FAIL:), sửa cấu hình rồi commit lại." >&2
+    exit 1 ;;
+esac
+if ! python3 "$REPO/tools/common/lint_identity.py"; then
+  echo ""
+  echo "pre-commit: lint định danh FAIL — sửa." >&2
+  exit 1
+fi
+
+# (1b) Id sản phẩm: chỉ khi commit đụng app.config.toml hoặc file .storekit. check_storekit.py đọc working tree,
+# nên (như khối 1) file .storekit không được còn thay đổi chưa stage / chưa từng add — app.config.toml thì khối 1
+# đã chặn ở trên. Khi đó working tree == index và lint nói đúng về commit.
+STOREKIT="AppHost/StoreKitConfig/Products.storekit"
+if git -c core.quotePath=false -C "$REPO" diff --cached --name-only --diff-filter=ACMDR | grep -qxF -e "app.config.toml" -e "$STOREKIT"; then
+  if ! git -C "$REPO" diff --quiet -- "$STOREKIT" \
+     || [ -n "$(git -C "$REPO" ls-files --others --exclude-standard -- "$STOREKIT")" ]; then
+    echo "pre-commit: $STOREKIT còn thay đổi chưa stage — hook kiểm đúng nội dung sẽ commit nên cần stage nó" \
+         "(git add $STOREKIT) hoặc bỏ thay đổi chưa stage đó." >&2
+    exit 1
+  fi
+  if ! python3 "$REPO/tools/release/check_storekit.py"; then
+    echo "" >&2
+    echo "pre-commit: id trong $STOREKIT lệch [purchases] product_ids — sửa cho khớp." >&2
+    exit 1
+  fi
+fi
+
+# (1c) Danh sách symbol debug khớp nguồn: chỉ khi commit đụng file Swift hoặc một trong HAI danh sách (của lõi và của
+# app). Như khối 1/1b, lint đọc working tree nên phải kiểm ĐÚNG nội dung sẽ commit: từ chối khi còn .swift (ở các gốc
+# lint quét) hoặc một danh sách thay đổi CHƯA stage / chưa từng add — khi đó working tree == index và lint nói đúng
+# về commit. File của app có thể mới hoàn toàn (chưa có trong HEAD) nên cũng tính khi nó chỉ mới được stage.
+SYMS="tools/release/debug_symbols.txt"
+APP_SYMS="AppHost/Config/debug_symbols.app.txt"
+SYMS_RE='^(tools/release/debug_symbols\.txt|AppHost/Config/debug_symbols\.app\.txt)$'
+LINT_SCOPE="Core CoreOptional AppHost/AppHost $SYMS $APP_SYMS"
+if git -c core.quotePath=false -C "$REPO" diff --cached --name-only --diff-filter=ACMDR | grep -qE "\.swift\$|$SYMS_RE"; then
+  # shellcheck disable=SC2086
+  UNSTAGED=$( { git -c core.quotePath=false -C "$REPO" diff --name-only -- $LINT_SCOPE; git -c core.quotePath=false -C "$REPO" ls-files --others --exclude-standard -- $LINT_SCOPE; } \
+              | grep -E "\.swift\$|$SYMS_RE" || true)
+  if [ -n "$UNSTAGED" ]; then
+    echo "pre-commit: còn thay đổi CHƯA stage ở nguồn Swift / $SYMS / $APP_SYMS — lint_debug_symbols đọc working tree nên cần" \
+         "stage chúng (git add <file>) hoặc bỏ thay đổi đó:" >&2
+    echo "$UNSTAGED" | sed 's/^/  /' >&2
+    exit 1
+  fi
+  if ! python3 "$REPO/tools/release/lint_debug_symbols.py"; then
+    echo "" >&2
+    echo "pre-commit: danh sách symbol debug ($SYMS / $APP_SYMS) lệch nguồn — thêm/bỏ tên cho khớp (xem dòng ở trên)." >&2
+    exit 1
+  fi
+fi
+
+# (1d) Lớp sở hữu — chỉ ở template ($KIND của khối 0; app được kiểm ở khối 0). Mọi file
+# track phải thuộc đúng một lớp của template.manifest.toml, mục khai đều khớp file. manifest.py --staged đọc INDEX git
+# đang commit (giữ GIT_INDEX_FILE của hook ⇒ đúng cả `git commit -a`) nên file mới đã stage / file đã xoá được tính;
+# còn manifest thì đọc ở working tree ⇒ (như khối 1) nó không được còn thay đổi chưa stage.
+# Repo không có manifest.py (vd repo tạm của test hook) ⇒ bỏ qua. Đủ luật a–e (một lần ls-files + đọc file text, ~0,3 s):
+# thêm cả "file sync/seed không trỏ file chỉ-template" và cú pháp khối `template:` trong file seed.
+MANIFEST="template.manifest.toml"
+if [ "$KIND" = template ] && [ -f "$REPO/tools/template/manifest.py" ]; then
+  if ! git -C "$REPO" diff --quiet -- "$MANIFEST" \
+     || [ -n "$(git -C "$REPO" ls-files --others --exclude-standard -- "$MANIFEST")" ]; then
+    echo "pre-commit: $MANIFEST còn thay đổi chưa stage — hook kiểm đúng nội dung sẽ commit nên cần stage nó" \
+         "(git add $MANIFEST) hoặc bỏ thay đổi chưa stage đó." >&2
+    exit 1
+  fi
+  python3 "$REPO/tools/template/manifest.py" check --staged --root "$REPO" >/dev/null
+  MANIFEST_RC=$?
+  case "$MANIFEST_RC" in
+    0) ;;
+    1)
+      python3 "$REPO/tools/template/manifest.py" check --staged --root "$REPO" 2>/dev/null | sed 's/^/  /' >&2
+      echo "" >&2
+      echo "pre-commit: vi phạm lớp sở hữu — khai file mới vào $MANIFEST (sync / seed / template_only); file sync/seed" \
+           "không nhắc file chỉ-template bằng đường dẫn (tên trần + \"của template\", hoặc khối template: trong file seed)." >&2
+      exit 1 ;;
+    *)
+      echo "" >&2
+      echo "pre-commit: $MANIFEST hỏng (rc=$MANIFEST_RC) — xem dòng FAIL: ở trên." >&2
+      exit 1 ;;
+  esac
+fi
+
+# (1e) Site tĩnh — chỉ khi repo có web/tools/check_site.py (app không có web ⇒ không làm gì) VÀ commit đụng
+# web/site/public/ hoặc app.config.toml (đổi công tắc / host thì privacy + sitemap phải theo). Sitemap: đủ trang, `lastmod`
+# của trang đang commit = hôm nay (`--staged`). Site: trang bất biến, privacy khớp công tắc, m.js chỉ khi web_api;
+# TEMPLATE-PLACEHOLDER chỉ cảnh báo ở đây (cổng ra bản dùng `--release`). Như khối 1, hai lint đọc working tree ⇒
+# web/site/public/ không được còn thay đổi chưa stage / chưa từng add.
+WEB_PUBLIC="web/site/public"
+if [ -f "$REPO/web/tools/check_site.py" ] \
+   && git -c core.quotePath=false -C "$REPO" diff --cached --name-only --diff-filter=ACMDR \
+      | grep -qE "^(web/site/public/|app\.config\.toml\$)"; then
+  if ! git -C "$REPO" diff --quiet -- "$WEB_PUBLIC" \
+     || [ -n "$(git -C "$REPO" ls-files --others --exclude-standard -- "$WEB_PUBLIC")" ]; then
+    echo "pre-commit: $WEB_PUBLIC/ còn thay đổi chưa stage — hook kiểm đúng nội dung sẽ commit nên cần stage chúng" \
+         "(git add $WEB_PUBLIC) hoặc bỏ thay đổi chưa stage đó." >&2
+    exit 1
+  fi
+  if ! python3 "$REPO/web/tools/check_sitemap.py" --staged --root "$REPO"; then
+    echo "" >&2
+    echo "pre-commit: sitemap.xml lệch trang — sửa <lastmod>/<url> theo dòng ở trên." >&2
+    exit 1
+  fi
+  if ! python3 "$REPO/web/tools/check_site.py" --root "$REPO"; then
+    echo "" >&2
+    echo "pre-commit: nội dung site lệch (xem dòng FAIL: ở trên)." >&2
+    exit 1
+  fi
+fi
+
+# (2) Chỉ khi commit đụng file Swift — lint quét cả cây nên không cần lọc theo file.
+# R: đổi tên thuần một file .swift cũng phải qua các lint dưới (diff --cached bật nhận diện đổi tên ⇒ status R).
+# core.quotePath=false ở mọi danh sách tên dưới đây: mặc định git bọc đường dẫn không-ASCII trong "…" (`"T\303\255nh.swift"`)
+# ⇒ lọc `\.swift$` trượt.
+if git -c core.quotePath=false diff --cached --name-only --diff-filter=ACMR | grep -q '\.swift$'; then
+  if ! python3 "$REPO/tools/i18n/lint_localizable.py"; then
+    echo ""
+    echo "pre-commit: lint String Catalog FAIL — sửa." >&2
+    exit 1
+  fi
+  # Firebase phải ở nguyên trong Core/Telemetry/FirebaseSink.swift — một dòng import lẻ ở một View
+  # nào đó phá cả kiến trúc facade mà không có triệu chứng nào cho tới lúc muốn đổi vendor.
+  if ! python3 "$REPO/tools/telemetry/lint_firebase_imports.py"; then
+    echo ""
+    echo "pre-commit: lint Firebase import FAIL — sửa." >&2
+    exit 1
+  fi
+  # Cờ FEATURE_* chỉ ở AppHost/, và Core/ + CoreTests/ không nhắc khối tuỳ chọn (CoreOnly biên dịch Core/ một mình).
+  if ! python3 "$REPO/tools/common/lint_feature_flag.py"; then
+    echo ""
+    echo "pre-commit: lint cờ FEATURE_* / biên khối tuỳ chọn FAIL — sửa." >&2
+    exit 1
+  fi
+  # Seed/store giả của route preview (*PreviewSeed/*PreviewStore) không được vào binary device.
+  if ! python3 "$REPO/tools/release/lint_preview_code.py"; then
+    echo ""
+    echo "pre-commit: lint code preview FAIL — bọc kiểu đó trong #if targetEnvironment(simulator)." >&2
+    exit 1
+  fi
+  # Biên tính năng mẫu: khối `// sample:…` đúng cú pháp, không symbol Sample* ngoài khối (kể cả comment), Core/ không
+  # biết mẫu. App đã gỡ mẫu (không còn Features/Sample/) ⇒ lệnh tự là no-op rc 0, hook giữ nguyên được.
+  if ! python3 "$REPO/tools/template/remove_sample.py" --check; then
+    echo ""
+    echo "pre-commit: biên tính năng mẫu FAIL — bọc dòng đó trong // sample:begin … // sample:end (xem đầu tools/template/remove_sample.py)." >&2
+    exit 1
+  fi
+fi
+
+# (3) Harness: frontmatter agent/skill, meta workflow, hook trỏ file — lỗi ở đây bị Claude Code lờ đi
+# im lặng, nên bắt ở commit. Kèm unit test của tools/factory (~1 s).
+if git -c core.quotePath=false diff --cached --name-only --diff-filter=ACMD | grep -qE '^(\.claude/|tools/factory/)'; then
+  if ! python3 "$REPO/tools/factory/lint_harness.py" --quiet; then
+    echo ""
+    echo "pre-commit: lint harness FAIL — sửa." >&2
+    exit 1
+  fi
+  if ! python3 -m unittest discover -s "$REPO/tools/factory" -p 'test_*.py' >/dev/null 2>&1; then
+    python3 -m unittest discover -s "$REPO/tools/factory" -p 'test_*.py' 2>&1 | tail -20
+    echo ""
+    echo "pre-commit: test tools/factory FAIL — sửa." >&2
+    exit 1
+  fi
+fi

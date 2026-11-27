@@ -1,0 +1,17 @@
+// SINH TỰ ĐỘNG từ app.config.toml — không sửa tay. Chạy: python3 tools/common/appconfig.py render
+APP_SLUG = cubingo
+APP_DISPLAY_NAME_STORE = Cubingo
+APP_DISPLAY_NAME_INTERNAL = Cubingo Dev
+APP_BUNDLE_ID_STORE = com.vimindtech.cubingo
+APP_BUNDLE_ID_INTERNAL = com.vimindtech.cubingo.internal
+APP_TEAM_ID = Q73A5F75B4
+APP_MARKETING_VERSION = 0.1.0
+APP_BUILD_NUMBER = 1
+APP_WEB_HOST_PROD = example.com
+APP_WEB_HOST_DEV = dev.example.com
+APP_STORE_ID =
+APP_SUPPORT_EMAIL = bongao.developer@gmail.com
+APP_FEATURE_PAYWALL = NO
+APP_FEATURE_APPLE_ADS = NO
+APP_FEATURE_WEB_API = NO
+APP_PRODUCT_IDS = pro.monthly pro.yearly pro.lifetime

@@ -1,0 +1,15 @@
+{
+  "response": null,
+  "files": {
+    "app-info/en-US.json": {
+      "name": "Sample",
+      "subtitle": ""
+    },
+    "version/0.1.0/en-US.json": {
+      "description": "TEMPLATE-PLACEHOLDER — describe the app here.",
+      "keywords": "TEMPLATE-PLACEHOLDER",
+      "promotionalText": "TEMPLATE-PLACEHOLDER — one short line about what is new or special.",
+      "whatsNew": "TEMPLATE-PLACEHOLDER — what changed in this version."
+    }
+  }
+}

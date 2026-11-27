@@ -1,0 +1,57 @@
+[app]
+slug = "cubingo"
+display_name = "Cubingo"
+display_name_internal = "Cubingo Dev"
+
+[bundle]
+store = "com.vimindtech.cubingo"
+internal = "com.vimindtech.cubingo.internal"
+
+[apple]
+team_id = "Q73A5F75B4"
+app_store_id = ""
+
+[version]
+marketing = "0.1.0"
+build = "1"
+
+[web]
+host_prod = "example.com"
+host_dev = "dev.example.com"
+# Đường dẫn mở app (AASA `components`). Mẫu có /items; `remove_sample.py` đặt về [].
+app_paths = []
+# true = site của app ở NGOÀI repo (không dùng web/site/public/): cổng 16 của verify_release_clean.sh in SKIP thay vì đòi
+# `web/tools/check_site.py --release`. false (mặc định) mà có host_prod nhưng thiếu web/site/public/ ⇒ cổng 16 FAIL.
+external_site = false
+
+[cloudflare]
+# database_id của D1, dán sau `wrangler d1 create` (việc tay). Rỗng ⇒ wrangler.jsonc ghi "TODO-d1-id", deploy từ chối.
+d1_prod = ""
+d1_dev = ""
+
+[firebase]
+# Audience App Check của API: "<projectId>:<projectNumber>". Rỗng khi features.web_api = true ⇒ `check` cảnh báo.
+app_check_prod = ""
+app_check_dev = ""
+
+[support]
+email = "bongao.developer@gmail.com"
+
+[features]
+paywall = false
+web_api = false
+apple_ads = false
+
+[purchases]
+product_ids = ["pro.monthly", "pro.yearly", "pro.lifetime"]
+subscription_group = "pro"
+
+[store]
+locales = ["en-US", "vi"]
+
+[analytics]
+ga4_property = ""
+bq_project = ""
+
+[i18n]
+languages = ["en"]

@@ -1,0 +1,104 @@
+{
+  "identifier" : "C07E7E57",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+    {
+      "displayPrice" : "100.00",
+      "familyShareable" : false,
+      "internalID" : "90000003",
+      "localizations" : [
+        {
+          "description" : "Core test fixture: one-time purchase.",
+          "displayName" : "Test Lifetime",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "test.pro.lifetime",
+      "referenceName" : "Test Lifetime",
+      "type" : "NonConsumable"
+    }
+  ],
+  "settings" : {
+    "_failTransactionsEnabled" : false,
+    "_locale" : "en_US",
+    "_storefront" : "USA",
+    "_storeKitErrors" : [
+
+    ]
+  },
+  "subscriptionGroups" : [
+    {
+      "id" : "90000010",
+      "localizations" : [
+
+      ],
+      "name" : "test.group",
+      "subscriptions" : [
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "1.00",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "90000001",
+          "introductoryOffer" : {
+            "internalID" : "90000021",
+            "paymentMode" : "free",
+            "subscriptionPeriod" : "P1W"
+          },
+          "localizations" : [
+            {
+              "description" : "Core test fixture: monthly.",
+              "displayName" : "Test Monthly",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "test.pro.monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "Test Monthly",
+          "subscriptionGroupID" : "90000010",
+          "type" : "RecurringSubscription"
+        },
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "10.00",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "90000002",
+          "introductoryOffer" : {
+            "internalID" : "90000022",
+            "paymentMode" : "free",
+            "subscriptionPeriod" : "P1W"
+          },
+          "localizations" : [
+            {
+              "description" : "Core test fixture: yearly.",
+              "displayName" : "Test Yearly",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "test.pro.yearly",
+          "recurringSubscriptionPeriod" : "P1Y",
+          "referenceName" : "Test Yearly",
+          "subscriptionGroupID" : "90000010",
+          "type" : "RecurringSubscription"
+        }
+      ]
+    }
+  ],
+  "version" : {
+    "major" : 3,
+    "minor" : 0
+  }
+}

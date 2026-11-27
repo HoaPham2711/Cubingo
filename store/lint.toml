@@ -1,0 +1,3 @@
+# Chữ cấm của RIÊNG app này, đọc bởi `aso.py lint` (không phân biệt hoa/thường, áp mọi locale, mọi field).
+# Lõi công cụ không mang sẵn từ nào: mỗi app tự ghi những cụm mà chính sách / pháp lý / thương hiệu của nó cấm trong listing.
+banned = []

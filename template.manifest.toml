@@ -1,0 +1,137 @@
+# Ba lớp sở hữu của MỌI file đang track — đọc/kiểm bằng tools/template/manifest.py (xem docstring đầu file đó).
+#   sync          template sở hữu, giống hệt từng byte ở mọi app; lệnh đồng bộ thay nguyên file, app không sửa tại chỗ
+#   seed          chép một lần lúc tạo app, sau đó app sở hữu; file trong overlay_dir đè lên / tạo ra file cùng
+#                 đường dẫn tương đối trong app
+#   template_only không bao giờ tới app
+# Mục kết thúc bằng "/" = cả thư mục; mục dài nhất khớp thắng; một mục không được khai ở hai lớp.
+# Thêm file mới ở template ⇒ khai nó ở đây (cổng `manifest.py check` đỏ khi có file track chưa thuộc lớp nào).
+schema = 1
+
+[sync]
+paths = [
+  "Core/",
+  "CoreTests/",
+  "CoreOptional/",
+  "CoreOptionalTests/",
+  "tools/common/",
+  # web/: mã API + công cụ npm là đồng bộ (wrangler.jsonc là file sinh — lớp gieo, khai ở [seed]; mục dài nhất thắng).
+  "web/api/",
+  # web/site/: Worker + test + package là đồng bộ; trang (public/) và releases.json là gieo (khai ở [seed]).
+  "web/site/",
+  # m.js gắn với hợp đồng beacon của API (web/api/src/routes/beacon.ts — đồng bộ) ⇒ đồng bộ theo, dù nằm trong public/.
+  "web/site/public/m.js",
+  "web/tools/",
+  # Chặn deploy khi cấu hình Cloudflare/Firebase còn thiếu (npm run deploy:*).
+  "web/scripts/",
+  "web/README.md",
+  "web/package.json",
+  "web/package-lock.json",
+  "web/.nvmrc",
+  "web/.gitignore",
+  "web/tsconfig.base.json",
+  "tools/aso/",
+  "tools/analytics/",
+  "tools/dev/",
+  "tools/factory/",
+  "tools/i18n/",
+  "tools/release/",
+  "tools/telemetry/",
+  "tools/template/manifest.py",
+  "tools/template/test_manifest.py",
+  "tools/template/blocks.py",
+  "tools/template/test_blocks.py",
+  "tools/template/remove_sample.py",
+  "tools/template/test_remove_sample.py",
+  "tools/template/sync_core.py",
+  "tools/template/test_sync_core.py",
+  "tools/template/selfcheck.sh",
+  "tools/template/test_selfcheck.py",
+  ".githooks/",
+  # Harness: khai TỪNG FILE (agent/hook/workflow) và TỪNG THƯ MỤC SKILL — Claude Code cố định chỗ đặt các thứ này, nên app
+  # thêm agent/skill riêng vào cùng thư mục: file/skill mới không khai ở đây = của app, cổng lệch lõi không báo `A`.
+  ".claude/agents/data-analyst.md",
+  ".claude/agents/factory-critic.md",
+  ".claude/agents/factory-planner.md",
+  ".claude/agents/factory-scribe.md",
+  ".claude/agents/factory-verifier.md",
+  ".claude/agents/growth-marketer.md",
+  ".claude/agents/ios-engineer.md",
+  ".claude/agents/platform-engineer.md",
+  ".claude/agents/release-manager.md",
+  ".claude/agents/researcher.md",
+  ".claude/agents/ui-reviewer.md",
+  ".claude/hooks/factory_context.py",
+  ".claude/hooks/factory_stop_gate.py",
+  ".claude/hooks/guard_asc.py",
+  ".claude/hooks/guard_autonomy.py",
+  ".claude/hooks/guard_test_config.py",
+  ".claude/hooks/post_merge_sync_develop.py",
+  ".claude/hooks/sim_gc.py",
+  ".claude/workflows/factory-eval.js",
+  ".claude/workflows/factory-execute.js",
+  ".claude/workflows/factory-research.js",
+  ".claude/workflows/factory-review.js",
+  ".claude/workflows/factory-weekly.js",
+  ".claude/skills/add-source-file/",
+  ".claude/skills/build-and-run/",
+  ".claude/skills/commit-convention/",
+  ".claude/skills/compile-check/",
+  ".claude/skills/factory/",
+  ".claude/skills/product-analytics/",
+  ".claude/skills/release-aso/",
+  ".claude/skills/sync-core/",
+  ".claude/skills/ui-preview-sim/",
+  ".claude/rules/conventions.core.md",
+  "docs/ARCHITECTURE.md",
+  "docs/RELEASE.md",
+  "docs/lessons-learned/",
+  "template.manifest.toml",
+]
+
+[seed]
+paths = [
+  "app.config.toml",
+  "web/api/wrangler.jsonc",
+  "web/site/wrangler.jsonc",
+  # Site: style/script/icon chép nguyên; trang có biến tới app qua thư mục gieo (template_only ở template).
+  "web/site/public/",
+  "web/site/releases.json",
+  "AppHost/",
+  "CLAUDE.md",
+  ".claude/rules/conventions.app.md",
+  ".claude/settings.json",
+  ".gitignore",
+  "docs/lessons-learned/app/",
+  "store/",
+]
+overlay_dir = "tools/template/seed"
+
+[template_only]
+paths = [
+  "docs/superpowers/",
+  "docs/decisions/",
+  "README.md",
+  "CHANGELOG.md",
+  "docs/ROADMAP.md",
+  "tools/template/feature_matrix_check.sh",
+  "tools/template/test_feature_matrix_check.py",
+  "tools/template/sample_removal_check.sh",
+  "tools/template/lib_tree_copy.sh",
+  "tools/template/test_sample_removal_check.py",
+  "tools/template/new_app_check.sh",
+  "tools/template/test_new_app_check.py",
+  "tools/template/seed/",
+  # Trang có biến của site: bản của template dựng từ thư mục gieo với cấu hình của template; app nhận bản gieo dựng với
+  # cấu hình của nó (tools/template/test_new_app.py gác hai bản không lệch nhau).
+  "web/site/public/index.html",
+  "web/site/public/404.html",
+  "web/site/public/robots.txt",
+  "web/site/public/sitemap.xml",
+  "web/site/public/privacy/",
+  "web/site/public/terms/",
+  "web/site/public/support/",
+  "web/site/public/changelog/",
+  "tools/template/new_app.py",
+  ".claude/skills/new-app/",
+  "tools/template/test_new_app.py",
+]

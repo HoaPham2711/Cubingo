@@ -1,0 +1,282 @@
+name: AppHost
+# Khối tuỳ chọn theo công tắc: appconfig.py render sinh file này từ app.config.toml (mảng `sources`/`dependencies`
+# trong file include được NỐI THÊM vào target, đã thử với XcodeGen 2.44). Không sửa tay file sinh ra.
+include:
+  - Config/Features.generated.yml
+  # Entitlement associated-domains (Universal Link) chỉ khi `[web] host_prod` khác rỗng — cũng do appconfig.py render sinh.
+  - Config/Entitlements.generated.yml
+options:
+  bundleIdPrefix: com.example
+  deploymentTarget: { iOS: "17.0" }
+  createIntermediateGroups: true
+  developmentLanguage: en
+configs: { Debug: debug, Internal: release, Release: release }
+# Telemetry (Core/Telemetry/FirebaseSink.swift — chỗ duy nhất import Firebase). Package resolve vào chỗ mặc định của
+# Xcode (DerivedData/.../SourcePackages), không vendor.
+# Phiên bản GHIM CHÍNH XÁC có chủ đích: Package.resolved nằm trong .xcodeproj (không commit), nên `from:` sẽ cho mỗi
+# app sinh từ template / mỗi máy một bản SDK khác nhau. Nâng phiên bản là một thay đổi có chủ đích và phải qua
+# tools/template/selfcheck.sh.
+packages:
+  Firebase:
+    url: https://github.com/firebase/firebase-ios-sdk
+    exactVersion: "12.19.3"
+configFiles:
+  Debug: Config/Identity.xcconfig
+  Internal: Config/Identity.xcconfig
+  Release: Config/Identity.xcconfig
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    SWIFT_EMIT_LOC_STRINGS: YES
+    DEVELOPMENT_TEAM: $(APP_TEAM_ID)
+    CODE_SIGN_STYLE: Automatic
+    TARGETED_DEVICE_FAMILY: "1,2"
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
+    FIREBASE_PLIST_DIR: $(SRCROOT)/Firebase
+  configs:
+    Debug:    { SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) DEBUG INTERNAL" }
+    Internal: { SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) INTERNAL" }
+targets:
+  AppHost:
+    type: application
+    platform: iOS
+    sources:
+      # README trong thư mục nguồn là tài liệu cho người đọc nguồn — không được vào .app như resource (cổng 4).
+      - path: AppHost
+        excludes: ["**/*.md"]
+      - path: AppHost/PrivacyInfo.xcprivacy
+        buildPhase: resources
+      # Lõi dùng chung: biên dịch thẳng vào app (một module, không framework/package); target CoreOnly ép biên.
+      - path: ../Core
+    info:
+      path: AppHost/Info.plist
+      properties:
+        CFBundleShortVersionString: $(APP_MARKETING_VERSION)
+        CFBundleVersion: $(APP_BUILD_NUMBER)
+        CFBundleDisplayName: $(APP_DISPLAY_NAME)
+        AppBundleIDInternal: $(APP_BUNDLE_ID_INTERNAL)
+        # Host web theo config (rỗng khi app không có web). Cổng 10 của verify_release_clean.sh đọc khoá này.
+        WebHost: $(APP_WEB_HOST)
+        # Cấu hình chạy lúc runtime (Core/Bootstrap/AppConfig.swift đọc). Cờ là chuỗi YES/NO; ProductIDs cách nhau bằng dấu cách.
+        AppStoreID: $(APP_STORE_ID)
+        SupportEmail: $(APP_SUPPORT_EMAIL)
+        FeaturePaywall: $(APP_FEATURE_PAYWALL)
+        FeatureAppleAds: $(APP_FEATURE_APPLE_ADS)
+        FeatureWebAPI: $(APP_FEATURE_WEB_API)
+        ProductIDs: $(APP_PRODUCT_IDS)
+        UILaunchScreen: {}
+        ITSAppUsesNonExemptEncryption: false
+        # Chốt cứng: app KHÔNG dùng tín hiệu quảng cáo. Cùng với product `FirebaseAnalyticsCore`
+        # (biến thể không thu IDFA) ⇒ không cần ATT prompt, privacy label ở mức nhẹ nhất.
+        GOOGLE_ANALYTICS_DEFAULT_ALLOW_AD_PERSONALIZATION_SIGNALS: false
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        UISupportedInterfaceOrientations~ipad: [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
+    # XcodeGen GHI ĐÈ file này từ `properties` (của đây + Config/Entitlements.generated.yml) mỗi lần generate: khả năng
+    # riêng của app thêm vào `properties:` ở đây, không sửa tay file .entitlements.
+    entitlements: { path: AppHost/AppHost.entitlements }
+    dependencies:
+      # FirebaseAnalyticsCore = biến thể KHÔNG thu IDFA (mã vẫn `import FirebaseAnalytics`). KHÔNG dùng
+      # `FirebaseAnalytics` (bản mặc định thu IDFA khi được ATT cho phép ⇒ kéo theo prompt ATT + privacy label
+      # nặng hơn). Target test KHÔNG link Firebase — chạy qua host app.
+      - package: Firebase
+        product: FirebaseAnalyticsCore
+      - package: Firebase
+        product: FirebaseCrashlytics
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID_STORE)
+        PRODUCT_NAME: AppHost
+        INFOPLIST_FILE: AppHost/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        APP_DISPLAY_NAME: $(APP_DISPLAY_NAME_STORE)
+      configs:
+        Debug:    { PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID_INTERNAL), APP_DISPLAY_NAME: $(APP_DISPLAY_NAME_INTERNAL), APP_WEB_HOST: $(APP_WEB_HOST_DEV) }
+        Internal: { PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID_INTERNAL), APP_DISPLAY_NAME: $(APP_DISPLAY_NAME_INTERNAL), APP_WEB_HOST: $(APP_WEB_HOST_DEV) }
+        Release:  { APP_WEB_HOST: $(APP_WEB_HOST_PROD) }
+    postBuildScripts:
+      # Chọn plist Firebase theo config ở BUILD (không phải runtime): bản Release về mặt vật lý
+      # không chứa plist dev. PHẢI là postBuildScripts — pha copy resources chạy giữa hai mốc build.
+      # Template không chứa plist thật: thiếu file ⇒ Debug cảnh báo + bỏ qua, Internal/Release lỗi.
+      - name: "Chọn GoogleService-Info theo config"
+        basedOnDependencyAnalysis: false
+        script: |
+          set -e
+          case "$CONFIGURATION" in
+            Release) SRC="$FIREBASE_PLIST_DIR/GoogleService-Info-Prod.plist" ;;
+            *)       SRC="$FIREBASE_PLIST_DIR/GoogleService-Info-Dev.plist" ;;
+          esac
+          if [ ! -f "$SRC" ]; then
+            if [ "$CONFIGURATION" = "Debug" ]; then
+              echo "warning: chưa có $SRC — bỏ qua (telemetry tắt)"
+              exit 0
+            fi
+            echo "error: thiếu $SRC — config $CONFIGURATION bắt buộc có plist Firebase"
+            exit 1
+          fi
+          cp "$SRC" "$BUILT_PRODUCTS_DIR/$CONTENTS_FOLDER_PATH/GoogleService-Info.plist"
+      # Upload dSYM cho Crashlytics — không có nó thì crash report trên Console chỉ là địa chỉ hex, vô dụng.
+      # Xếp SAU script chọn plist (chạy theo thứ tự khai báo). Nhận plist tường minh qua `-gsp` trỏ vào file
+      # NGUỒN, không phụ thuộc bản đã chép vào .app.
+      #
+      # Thoát êm (exit 0, không dòng error) khi không có gì để upload: config không sinh dSYM (Debug), chưa có plist
+      # Firebase (template mới / Debug chưa cấu hình — script trên đã cảnh báo), plist fixture của selfcheck (id giả,
+      # không được gửi đi đâu), hoặc chưa resolve SPM. `exit 1` ở mấy chỗ đó chỉ làm hỏng vòng compile-check hằng
+      # ngày mà không bảo vệ được gì. Không khai plist trong inputFiles: Xcode báo lỗi khi input khai báo vắng mặt.
+      - name: "Crashlytics dSYM"
+        # Chạy mọi lần build (không có output để Xcode so) — tắt phân tích phụ thuộc cho Xcode khỏi cảnh báo.
+        # inputFiles vẫn giữ: nó buộc pha này chờ dSYM sinh xong.
+        basedOnDependencyAnalysis: false
+        script: |
+          set -e
+          if [ "$DEBUG_INFORMATION_FORMAT" != "dwarf-with-dsym" ]; then
+            echo "note: config $CONFIGURATION không sinh dSYM — bỏ qua upload Crashlytics"
+            exit 0
+          fi
+          case "$CONFIGURATION" in
+            Release) GSP="$FIREBASE_PLIST_DIR/GoogleService-Info-Prod.plist" ;;
+            *)       GSP="$FIREBASE_PLIST_DIR/GoogleService-Info-Dev.plist" ;;
+          esac
+          if [ ! -f "$GSP" ]; then
+            echo "note: chưa có $GSP — bỏ qua upload dSYM"
+            exit 0
+          fi
+          if /usr/libexec/PlistBuddy -c "Print :FACTORY_FIXTURE_PLIST" "$GSP" >/dev/null 2>&1; then
+            echo "note: $GSP là plist fixture — bỏ qua upload dSYM"
+            exit 0
+          fi
+          RUN="${BUILD_DIR%/Build/*}/SourcePackages/checkouts/firebase-ios-sdk/Crashlytics/run"
+          if [ ! -x "$RUN" ]; then
+            echo "warning: không thấy script Crashlytics ở $RUN — bỏ qua upload dSYM"
+            exit 0
+          fi
+          "$RUN" -gsp "$GSP"
+        inputFiles:
+          - ${DWARF_DSYM_FOLDER_PATH}/${DWARF_DSYM_FILE_NAME}/Contents/Resources/DWARF/${TARGET_NAME}
+  AppHostTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: AppHostTests
+      - path: ../CoreTests
+        # Khai riêng ngay dưới (resource tường minh) — không để glob liệt kê lần nữa.
+        excludes: ["Purchases/CoreProducts.storekit"]
+      # File `.storekit` là resource của TEST BUNDLE — và CHỈ của target này: chính cách nối này (không phải resource
+      # của target AppHost) giữ chúng ngoài .app. Cổng 13 của tools/release/verify_release_clean.sh kiểm điều đó
+      # (luôn, bật hay tắt paywall).
+      # - Products.storekit: của APP (id khớp [purchases] product_ids — check_storekit.py); SmokeTests đối chiếu
+      #   store giả của route paywall với nó.
+      # - CoreProducts.storekit: fixture RIÊNG của lõi cho LiveStoreClientTests (SKTestSession nạp từ test bundle);
+      #   id `test.pro.*` không dính cấu hình app — app đổi sản phẩm không phải sửa CoreTests/.
+      - path: StoreKitConfig/Products.storekit
+        buildPhase: resources
+      - path: ../CoreTests/Purchases/CoreProducts.storekit
+        buildPhase: resources
+    dependencies:
+      - target: AppHost
+      # Chỉ test target được link — framework này không có chỗ trong app.
+      - sdk: StoreKitTest.framework
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID_STORE)Tests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/AppHost.app/AppHost
+        BUNDLE_LOADER: $(TEST_HOST)
+  AppHostUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [AppHostUITests]
+    dependencies:
+      - target: AppHost
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID_STORE)UITests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: AppHost
+  # Chỉ để trình biên dịch ép biên "Core/ không biết app": biên dịch riêng Core/, không ai phụ thuộc, không nhúng
+  # vào app, không nằm trong scheme AppHost. Tham chiếu một kiểu của AppHost/ từ Core/ ⇒ build CoreOnly đỏ.
+  CoreOnly:
+    type: library.static
+    platform: iOS
+    sources:
+      - path: ../Core
+    # Cùng hai product với AppHost — FirebaseSink.swift (trong Core/) import chúng. `link: true` BẮT BUỘC: với static
+    # library XcodeGen mặc định không đưa product vào pha Frameworks, mà Xcode chỉ cấp module map của các target
+    # ObjC trong package (FirebaseCore, FirebaseCrashlytics) cho target có product ở pha đó ⇒ thiếu là
+    # "Unable to resolve module dependency: 'FirebaseCore'".
+    dependencies:
+      - package: Firebase
+        product: FirebaseAnalyticsCore
+        link: true
+      - package: Firebase
+        product: FirebaseCrashlytics
+        link: true
+schemes:
+  # Scheme hằng ngày: Run ra bản có tool debug (Internal), Archive vẫn ra bản sạch (Release).
+  AppHost:
+    build:
+      targets:
+        AppHost: all
+        AppHostTests: [test]
+    run:
+      config: Internal
+      # Bản Internal mang bundle id nội bộ, KHÁC app record trên App Store Connect, nên không bao giờ tải được
+      # sản phẩm sandbox thật. Cấu hình StoreKit local (tuỳ chọn RUN của scheme, không nằm trong .app) giữ cho
+      # paywall soi được mọi lúc khi Run từ Xcode.
+      storeKitConfiguration: StoreKitConfig/Products.storekit
+    test:
+      config: Debug
+      targets:
+        - name: AppHostTests
+          # LiveStoreClientTests nói chuyện với StoreKit (SKTestSession) — trên Simulator nó từng bật hộp thoại
+          # "Sign in to Apple Account" và treo cả suite (app nguồn). Mặc định BỎ QUA; chạy chủ động khi đụng
+          # Core/Purchases/LiveStoreClient hoặc fixture CoreTests/Purchases/CoreProducts.storekit:
+          #   tools/dev/run_tests.py --storekit
+          skippedTests:
+            - LiveStoreClientTests
+    archive:
+      config: Release
+  # Scheme CHỈ để chạy LiveStoreClientTests theo yêu cầu (`tools/dev/run_tests.py --storekit`) — scheme chính skip
+  # class này, và `-only-testing` KHÔNG vượt được `skippedTests` của scheme (đã thử ở app nguồn). Không ai
+  # build/run/archive app qua scheme này. Test chỉ ở Debug (bundle id nội bộ).
+  AppHost-StoreKitTests:
+    build:
+      targets:
+        AppHost: [test]
+        AppHostTests: [test]
+    test:
+      config: Debug
+      targets:
+        - AppHostTests
+  AppHost-UIShots:
+    build:
+      targets:
+        AppHost: all
+        AppHostUITests: [test]
+    test:
+      config: Debug
+      targets:
+        - AppHostUITests
+  # Scheme Store: KHÔNG có action test (test chạy ở bundle id Store sẽ đụng StoreKit sandbox thật).
+  AppHost-Store:
+    build:
+      targets:
+        AppHost: all
+    run:
+      config: Release
+    archive:
+      config: Release
+  # Cổng biên lõi (selfcheck.sh): chỉ build, chỉ Debug.
+  CoreOnly:
+    build:
+      targets:
+        CoreOnly: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+    profile:
+      config: Debug
+    analyze:
+      config: Debug
+    archive:
+      config: Debug
