@@ -52,7 +52,7 @@ struct AppShellView: View {
     var body: some View {
         HomeView(updateChecker: updateChecker, openStore: openStore, flow: flow, deps: deps,
                  onOpenSettings: { showSettings = true })
-            .internalDebugSheet(entitlements: entitlements, reviewPrompter: reviewPrompter,
+            .internalDebugSheet(entitlements: entitlements, reviewPrompter: reviewPrompter, flow: flow,
                                 arm: { reviewScheduler.arm($0, bypassPolicy: true) })
             .sheet(isPresented: $showSettings) {
                 settings
@@ -102,7 +102,7 @@ struct AppShellView: View {
                 }
             },
             internalSection: {
-                AppInternalSettingsSection(entitlements: entitlements, reviewPrompter: reviewPrompter,
+                AppInternalSettingsSection(entitlements: entitlements, reviewPrompter: reviewPrompter, flow: flow,
                                            arm: { reviewScheduler.arm($0, bypassPolicy: true) })
             },
             destination: { route in settingsDestination(route) },

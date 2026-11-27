@@ -14,17 +14,12 @@ struct FlowModeView: View {
                 Text(solved ? "Already solved! Nice." : "How do you want to solve it?")
                     .scaledFont(size: 28, weight: .heavy, design: .rounded)
                     .foregroundColor(DSColor.textPrimary)
-                // Chỉ dựng khối 3D khi màn này ở trên cùng (xem `Cube3DView`: hai RealityView trong stack ⇒ màn trên
-                // không vẽ).
-                Group {
-                    if flow.path.last == .mode, let cube = flow.cube, let palette = flow.palette {
-                        Cube3DView(state: cube, palette: palette, animation: nil, speed: deps.prefs.speed,
-                                   highlight: nil)
-                    } else {
-                        Color.clear
-                    }
+                // Hình tĩnh (Canvas), không RealityView: màn chỉ bước đẩy lên trên phải là RealityView duy nhất.
+                if let cube = flow.cube, let palette = flow.palette {
+                    Cube3DIsoView(state: cube, palette: palette)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 260)
                 }
-                .frame(height: 260)
                 if solved {
                     Button("Scan another cube") { flow.startOver() }
                         .buttonStyle(StyleThickButton())

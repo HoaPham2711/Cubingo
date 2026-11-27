@@ -29,6 +29,17 @@ final class ScanClustererTests: XCTestCase {
         }
     }
 
+    /// Dưới đèn vàng ấm tâm trắng có C* ≈ 27: vẫn phải được dùng làm mốc cân trắng, không thì ô trắng bị gọi "yellow".
+    func testDenAmTrangVanLaTrang() {
+        for i in 0..<10 {
+            let f = state(UInt64(700 + i))
+            let r = ScanClusterer.cluster(ScanFixtures.samples(for: f, palette: .manualDefault, .warmLamp, seed: UInt64(i)), n: 3)
+            XCTAssertEqual(r.palette.colorName(CubeColor(raw: 0)), .white, "#\(i)")
+            XCTAssertEqual(r.palette.colorName(CubeColor(raw: 3)), .yellow, "#\(i)")
+            XCTAssertEqual(r.palette.baseColor, CubeColor(raw: 0))
+        }
+    }
+
     func testDenAmVanTachDoCam() {
         let red = CubeColor(raw: 1), orange = CubeColor(raw: 4)
         for i in 0..<40 {

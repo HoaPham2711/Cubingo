@@ -71,6 +71,9 @@ private struct FlowPuzzleCard: View {
             Text(puzzle.title)
                 .scaledFont(size: 22, weight: .heavy, design: .rounded)
                 .foregroundColor(DSColor.textPrimary)
+                // Cỡ chữ trợ năng: co chữ thay vì ngắt giữa từ ("Pyrami d").
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
             Text(puzzle.subtitle)
                 .scaledFont(size: 14, weight: .medium, design: .rounded)
                 .foregroundColor(DSColor.textSecondary)

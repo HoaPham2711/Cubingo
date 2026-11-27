@@ -5,15 +5,16 @@ trong `docs/superpowers/`. Mẫu tiêu đề: `## <ngày> — <tiêu đề> (<nh
 bằng `python3 tools/factory/roadmap.py debt`. App sinh từ template tag `v0.6.0-1-g20b1621` ngày 2026-11-27; việc tay trước bản
 đầu tiên ở `docs/NEW_APP_CHECKLIST.md`.
 
-## 2026-11-27 — Bản 1: thiết kế đã duyệt, plan Đợt A đã viết (develop, chưa merge, chưa device)
+## 2026-11-27 — Đợt A: 3×3 trọn vẹn đã code xong, chờ thử device (claude/plan-dot-a, chưa merge, chưa device)
 
-App hướng dẫn giải khối 3×3 + 2×2 cho người mới: quét camera (bảng màu tự nhận) → kiểm tra → Teach me (7 chặng) / Just
-solve it → chỉ bước bằng khối 3D RealityKit; ~10 hoa văn; en + vi; iOS 18; miễn phí, không quảng cáo. Spec đã duyệt:
-`docs/superpowers/specs/2026-11-27-cubingo-design.md` (+ bản phác `specs/assets/2026-11-27-cubingo/`).
-Plan **Đợt A** (3×3 trọn vẹn, 17 task, chờ user duyệt): `docs/superpowers/plans/2026-11-27-cubingo-dot-a.md`. Sau đó
-Đợt B (2×2, Patterns, tiếng Việt, iPad, đo lường), Đợt C (store/ASO, web khi có tên miền, ra bản 1.0).
-Lõi template: `v0.6.1` (đã sync 2026-11-27). Remote GitHub `HoaPham2711/Cubingo` đã có (main + develop, 2026-11-27).
+Luồng chọn khối → quét (camera, tự chụp, phân nhóm Hungarian) / nhập tay → kiểm tra → Teach me (7 chặng, daisy, quét
+kiểm tra + lập lại lời giải) / Just solve it (Kociemba hai pha tự viết, bảng 4,2 MB nhúng) → chỉ bước bằng khối 3D
+RealityKit → màn xong. Plan `docs/superpowers/plans/2026-11-27-cubingo-dot-a.md`; quyết định khi làm ở mục "Rulings"
+của báo cáo nhánh. Kiểm: L2 + ảnh iPhone/iPad; vét cạn 62 208 ca tầng cuối. Kế tiếp: user chạy
+`docs/superpowers/plans/2026-11-27-cubingo-dot-a-device-checklist.md`, rồi Đợt B (2×2, Patterns, vi, đo lường, mẫu màu
+thật), Đợt C (store/ASO, web, 1.0). Spec: `docs/superpowers/specs/2026-11-27-cubingo-design.md`.
+Lõi template `v0.6.1`. Remote GitHub `HoaPham2711/Cubingo` (main + develop, 2026-11-27).
 Nợ: tên miền chưa mua (`cubingo.io`/`.co`/`getcubingo.com` còn trống 2026-11-27) ⇒ `web.host_prod` còn giữ chỗ.
-Project Firebase chưa tạo.
+Project Firebase chưa tạo. Chặng 2 Teach me có ca ~100 bước (lặp right trigger) — xem lại sau thử device.
 
 ## Nợ đã biết

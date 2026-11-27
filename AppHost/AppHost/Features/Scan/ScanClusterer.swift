@@ -19,8 +19,9 @@ struct ScanResult: Equatable {
 /// nhóm đúng n² ô bằng Hungarian trên ΔE76 tới tâm.
 enum ScanClusterer {
     static let ambiguousCenterDeltaE = 15.0
-    /// Tâm dùng để cân trắng phải sáng (L* > 50) và gần xám (C* < 25) — tâm đen không phải mốc trắng.
-    static let whiteReferenceMaxChroma = 25.0
+    /// Tâm dùng để cân trắng phải sáng (L* > 50) và ít sắc nhất với C* < 40 — đèn vàng ấm đẩy tâm trắng lên C* ≈ 27;
+    /// tâm đen không phải mốc trắng.
+    static let whiteReferenceMaxChroma = 40.0
 
     static func cluster(_ samples: [CubeRGB], n: Int) -> ScanResult {
         precondition(n == 3, "Đợt A chỉ quét 3×3")

@@ -53,7 +53,9 @@ final class ScanCaptureModel: ObservableObject {
         lastCenter = s[4]
         stepIndex += 1
         if stepIndex >= steps.count {
-            result = ScanClusterer.cluster(ScanProtocol.assemble(grids), n: 3)
+            let samples = ScanProtocol.assemble(grids)
+            AppInternalScanLog.record(samples)
+            result = ScanClusterer.cluster(samples, n: 3)
         }
         return true
     }
@@ -99,7 +101,9 @@ struct ScanView: View {
             camera.expect(checkFace ?? model.step.face ?? .f)
         }
         .onDisappear { camera.stop() }
-        .onChange(of: camera.samples) { _, s in handle(s) }
+        // Mọi khung, kể cả khung giống hệt khung trước (đứng yên tuyệt đối): `onChange` bỏ qua giá trị không đổi ⇒ bộ
+        // ổn định không bao giờ đủ 0,6 s.
+        .onReceive(camera.$samples) { handle($0) }
         .onChange(of: model.stepIndex) { _, _ in camera.expect(model.step.face ?? .f) }
         .onChange(of: model.result) { _, r in
             if let r { flow.didScan(r) }
