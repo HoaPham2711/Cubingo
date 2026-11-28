@@ -10,6 +10,8 @@ enum ScanTurn: Equatable {
     case tiltTowardYou
     /// Lật tiếp 180° cùng chiều `tiltTowardYou`.
     case flipTowardYou
+    /// Lật mặt dưới về phía mình 90° (quét kiểm tra mặt dưới trong màn giải).
+    case tiltAwayFromYou
 }
 
 /// Toán hướng khối khi quét (thuần, không RealityKit). Khung khối: x sang phải (R), y lên (U), z về phía camera (F) —
@@ -22,6 +24,7 @@ enum ScanOrientation {
         case .left: return simd_quatf(angle: -.pi / 2, axis: SIMD3(0, 1, 0))
         case .tiltTowardYou: return simd_quatf(angle: .pi / 2, axis: SIMD3(1, 0, 0))
         case .flipTowardYou: return simd_quatf(angle: .pi, axis: SIMD3(1, 0, 0))
+        case .tiltAwayFromYou: return simd_quatf(angle: -.pi / 2, axis: SIMD3(1, 0, 0))
         }
     }
 

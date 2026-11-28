@@ -31,4 +31,23 @@ final class ScanOrientationTests: XCTestCase {
         let images = ScanProtocol.cube3.map { st in st.image.map { samples[$0] } }
         XCTAssertEqual(ScanProtocol.assemble(images), samples)
     }
+
+    func testMuiTenTheoDongTac() {
+        let rect = CGRect(x: 0, y: 0, width: 300, height: 300)
+        XCTAssertTrue(ScanTurnArrow.path(.none, in: rect).isEmpty)
+        XCTAssertNil(ScanTurnArrow.endpoints(.none, in: rect))
+        let all: [ScanTurn] = [.left, .tiltTowardYou, .tiltAwayFromYou, .flipTowardYou]
+        for t in all {
+            let p = ScanTurnArrow.path(t, in: rect)
+            XCTAssertFalse(p.isEmpty, "\(t)")
+            XCTAssertTrue(rect.insetBy(dx: -1, dy: -1).contains(p.boundingRect), "\(t)")
+        }
+        let l = ScanTurnArrow.endpoints(.left, in: rect)!
+        XCTAssertLessThan(l.end.x, l.start.x)
+        let d = ScanTurnArrow.endpoints(.tiltTowardYou, in: rect)!
+        XCTAssertGreaterThan(d.end.y, d.start.y)
+        let u = ScanTurnArrow.endpoints(.tiltAwayFromYou, in: rect)!
+        XCTAssertLessThan(u.end.y, u.start.y)
+        XCTAssertEqual(ScanOrientation.frontFace(ScanOrientation.rotation(.tiltAwayFromYou)), .d)
+    }
 }

@@ -192,6 +192,7 @@ struct ScanView: View {
         case .left: return String(localized: "Turn the cube left — the next center should face you")
         case .tiltTowardYou: return String(localized: "Tilt the top toward you")
         case .flipTowardYou: return String(localized: "Tilt the same way twice more to show the bottom")
+        case .tiltAwayFromYou: return String(localized: "Tilt the bottom toward you")
         }
     }
 
@@ -201,6 +202,7 @@ struct ScanView: View {
         case .left: return "arrow.left"
         case .tiltTowardYou: return "arrow.down"
         case .flipTowardYou: return "arrow.down.circle"
+        case .tiltAwayFromYou: return "arrow.up"
         }
     }
 }
