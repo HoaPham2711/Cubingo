@@ -21,12 +21,17 @@ enum ScanPreviewSeed {
         }
     }
 
-    /// Kết quả quét đầy đủ của trạng thái mẫu (route `review`).
-    static var scanResult: ScanResult {
-        var grids: [CubeFace: [CubeRGB]] = [:]
-        for f in CubeFace.allCases { grids[f] = grid(f) }
-        return ScanClusterer.cluster(ScanProtocol.assemble(grids), n: 3)
+    /// 54 mẫu theo thứ tự Kociemba.
+    static var samples54: [CubeRGB] { CubeFace.allCases.flatMap { grid($0) } }
+
+    /// Ảnh camera thấy ở một bước quét (thứ tự đọc ảnh).
+    static func image(_ step: ScanStep) -> [CubeRGB] {
+        let s = samples54
+        return step.image.map { s[$0] }
     }
+
+    /// Kết quả quét đầy đủ của trạng thái mẫu (route `review`).
+    static var scanResult: ScanResult { ScanClusterer.cluster(samples54, n: 3) }
 
     /// Như `scanResult` nhưng một ô bị đọc sai màu (route `review` có thông báo lỗi để chụp).
     static var scanResultWithMistake: ScanResult {

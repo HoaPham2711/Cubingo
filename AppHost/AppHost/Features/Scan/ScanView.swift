@@ -1,97 +1,10 @@
 import QuartzCore
 import SwiftUI
 
-enum ScanCaptureMessage: Equatable { case notFirstSide, alreadyScanned }
-
 /// Quét cả khối (6 mặt) hoặc chỉ một mặt để kiểm tra sau chặng.
 enum ScanMode: Equatable {
     case full
     case checkFace(GuideCheckSpec, expected: CubeFacelets)
-}
-
-/// Đi qua `ScanProtocol.cube3`: nhận lưới 9 mẫu mỗi lần chụp, kiểm "đã về mặt đầu" và "mặt đã quét", lắp + phân nhóm
-/// khi đủ 6 mặt.
-@MainActor
-final class ScanCaptureModel: ObservableObject {
-    let steps = ScanProtocol.cube3
-    @Published private(set) var stepIndex = 0
-    @Published private(set) var grids: [CubeFace: [CubeRGB]] = [:]
-    @Published private(set) var message: ScanCaptureMessage?
-    @Published private(set) var result: ScanResult?
-    private var lastCenter: CubeRGB?
-
-    static let sameCenterDeltaE = 10.0
-    static let firstSideDeltaE = 15.0
-
-    var step: ScanStep { steps[min(stepIndex, steps.count - 1)] }
-    var capturedCount: Int { grids.count }
-
-    /// Trung tâm của từng lần chụp đã nhận (để hoàn tác).
-    private var history: [CubeRGB] = []
-    static let flatFaceDeltaE = 12.0
-
-    /// Bắt đầu lại từ đầu (quay về từ màn kiểm tra bằng "Scan again").
-    func reset() {
-        stepIndex = 0
-        grids = [:]
-        message = nil
-        result = nil
-        lastCenter = nil
-        history = []
-    }
-
-    /// Hoàn tác lần chụp gần nhất (chụp nhầm mặt bàn, nhầm mặt…).
-    func undoLast() {
-        guard stepIndex > 0, result == nil else { return }
-        stepIndex -= 1
-        if let face = steps[stepIndex].face { grids[face] = nil }
-        history.removeLast()
-        lastCenter = history.last
-        message = nil
-    }
-
-    var canUndo: Bool { stepIndex > 0 && result == nil }
-
-    /// 9 ô gần như cùng một màu ⇒ nhiều khả năng không phải mặt khối (bàn, trần) — không tự chụp (chụp tay vẫn được,
-    /// mặt đã giải thật cũng đều màu).
-    static func looksFlat(_ s: [CubeRGB]) -> Bool {
-        s.allSatisfy { CubeColorMath.deltaE($0, s[4]) < flatFaceDeltaE }
-    }
-
-    /// Tự chụp chỉ khi tâm đã đổi so với lần chụp trước (người dùng đã xoay khối).
-    func allowsAutoCapture(_ s: [CubeRGB]) -> Bool {
-        guard s.count == 9, result == nil, !Self.looksFlat(s) else { return false }
-        guard let lastCenter else { return true }
-        return CubeColorMath.deltaE(s[4], lastCenter) >= Self.sameCenterDeltaE
-    }
-
-    /// `true` ⇒ đã nhận lưới (sang bước sau).
-    @discardableResult
-    func capture(_ s: [CubeRGB]) -> Bool {
-        guard s.count == 9, result == nil else { return false }
-        if let face = step.face {
-            if grids.values.contains(where: { CubeColorMath.deltaE($0[4], s[4]) < Self.sameCenterDeltaE }) {
-                message = .alreadyScanned
-                return false
-            }
-            grids[face] = s
-        } else {
-            guard let first = grids[.f], CubeColorMath.deltaE(first[4], s[4]) < Self.firstSideDeltaE else {
-                message = .notFirstSide
-                return false
-            }
-        }
-        message = nil
-        lastCenter = s[4]
-        history.append(s[4])
-        stepIndex += 1
-        if stepIndex >= steps.count {
-            let samples = ScanProtocol.assemble(grids)
-            AppInternalScanLog.record(samples)
-            result = ScanClusterer.cluster(samples, n: 3)
-        }
-        return true
-    }
 }
 
 /// Màn quét bằng camera: chữ hướng dẫn theo bước, màu sống trong 9 ô, tự chụp khi khung hình đứng yên, nút chụp tay,
@@ -132,19 +45,14 @@ struct ScanView: View {
         .styleBackground()
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
-            // Quay lại từ màn kiểm tra ("Scan again") ⇒ quét lại từ đầu.
-            if model.result != nil { model.reset() }
             camera.start()
-            camera.expect(checkFace ?? model.step.face ?? .f)
+            if let checkFace { camera.expect(checkFace) } else { camera.expect(model.step) }
         }
         .onDisappear { camera.stop() }
         // Mọi khung, kể cả khung giống hệt khung trước (đứng yên tuyệt đối): `onChange` bỏ qua giá trị không đổi ⇒ bộ
         // ổn định không bao giờ đủ 0,6 s.
         .onReceive(camera.$samples) { handle($0) }
-        .onChange(of: model.stepIndex) { _, _ in camera.expect(model.step.face ?? .f) }
-        .onChange(of: model.result) { _, r in
-            if let r { flow.didScan(r) }
-        }
+        .onChange(of: model.stepIndex) { _, _ in camera.expect(model.step) }
         .trackScreen("scan_camera")
     }
 
@@ -167,13 +75,13 @@ struct ScanView: View {
         case .d?: return String(localized: "Show us the bottom side")
         case .u?: return String(localized: "Show us the top side")
         case .some: return String(localized: "Show us the front side")
-        case nil: return Self.text(model.step.instruction)
+        case nil: return Self.text(model.step.turn)
         }
     }
 
     private var instruction: some View {
         HStack(spacing: 12) {
-            Image(systemName: checkFace == nil ? Self.arrow(model.step.instruction) : "checkmark.viewfinder")
+            Image(systemName: checkFace == nil ? Self.arrow(model.step.turn) : "checkmark.viewfinder")
                 .scaledFont(size: 28, weight: .bold, design: .rounded)
                 .foregroundColor(DSColor.accent)
                 .frame(width: 44)
@@ -208,11 +116,7 @@ struct ScanView: View {
 
     @ViewBuilder
     private var feedback: some View {
-        if let m = model.message {
-            label(m == .notFirstSide ? String(localized: "That's not the first side yet")
-                                     : String(localized: "This side was already scanned — turn once more"),
-                  icon: "exclamationmark.circle.fill", color: DSColor.statusWarning)
-        } else if let tip {
+        if let tip {
             label(tip == .tooDark ? String(localized: "Face a window or a lamp")
                                   : String(localized: "Too much glare — tilt the cube slightly"),
                   icon: "lightbulb.fill", color: DSColor.textSecondary)
@@ -261,11 +165,9 @@ struct ScanView: View {
     private func handle(_ s: [CubeRGB]) {
         guard s.count == 9 else { return }
         tip = ScanLighting.tip(s)
+        guard checkFace != nil else { return model.observe(s) }
         guard stabilizer.feed(s, at: CACurrentMediaTime()) else { return }
-        let allowed = checkFace != nil
-            ? (!ScanCaptureModel.looksFlat(s) || acceptsFace != nil) && (acceptsFace?(s) ?? true)
-            : model.allowsAutoCapture(s)
-        if allowed { capture(s) } else { stabilizer.reset() }
+        if acceptsFace?(s) ?? true { capture(s) } else { stabilizer.reset() }
     }
 
     private func capture(_ s: [CubeRGB]) {
@@ -276,27 +178,29 @@ struct ScanView: View {
             stabilizer.reset()
             return
         }
-        if model.capture(s) { deps.haptic(.capture) }
-        stabilizer.reset()
-    }
-
-    static func text(_ i: ScanInstruction) -> String {
-        switch i {
-        case .start: return String(localized: "Point the camera at any side")
-        case .turnLeft: return String(localized: "Turn the cube left — the next center should face you")
-        case .backToFirst: return String(localized: "Turn left once more — the first side faces you again")
-        case .tiltTopToYou: return String(localized: "Tilt the top toward you")
-        case .tiltBottomToYou: return String(localized: "Tilt the other way to show the bottom")
+        switch model.capture() {
+        case .accepted: deps.haptic(.capture)
+        case .duplicate: deps.haptic(.warning)
+        case .finished(let r): flow.didScan(r)
+        case .notReady: break
         }
     }
 
-    static func arrow(_ i: ScanInstruction) -> String {
-        switch i {
-        case .start: return "viewfinder"
-        case .turnLeft: return "arrow.left"
-        case .backToFirst: return "arrow.uturn.left"
-        case .tiltTopToYou: return "arrow.down"
-        case .tiltBottomToYou: return "arrow.up"
+    static func text(_ t: ScanTurn) -> String {
+        switch t {
+        case .none: return String(localized: "Point the camera at any side")
+        case .left: return String(localized: "Turn the cube left — the next center should face you")
+        case .tiltTowardYou: return String(localized: "Tilt the top toward you")
+        case .flipTowardYou: return String(localized: "Tilt the same way twice more to show the bottom")
+        }
+    }
+
+    static func arrow(_ t: ScanTurn) -> String {
+        switch t {
+        case .none: return "viewfinder"
+        case .left: return "arrow.left"
+        case .tiltTowardYou: return "arrow.down"
+        case .flipTowardYou: return "arrow.down.circle"
         }
     }
 }

@@ -1,7 +1,7 @@
 @testable import AppHost
 import XCTest
 
-/// Đi hết luồng bằng logic thật (không UI): quét 7 bước từ mẫu màu ⇒ kiểm tra ⇒ chọn cách giải ⇒ chỉ bước tới xong.
+/// Đi hết luồng bằng logic thật (không UI): quét 6 bước từ mẫu màu ⇒ kiểm tra ⇒ chọn cách giải ⇒ chỉ bước tới xong.
 /// Bằng chứng tích hợp cho Đợt A (các màn chỉ là lớp mỏng gọi đúng các hàm này).
 @MainActor
 final class FlowEndToEndTests: XCTestCase {
@@ -10,9 +10,7 @@ final class FlowEndToEndTests: XCTestCase {
         let f = CubeRandom.state(using: &rng).facelets(centers: cubeStandardCenters)
         let samples = ScanFixtures.samples(for: f, palette: .manualDefault, .warmLamp, seed: seed)
         let capture = ScanCaptureModel()
-        for face: CubeFace in [.f, .r, .b, .l, .f, .u, .d] {
-            capture.capture(Array(samples[(face.rawValue * 9)..<(face.rawValue * 9 + 9)]))
-        }
+        ScanFixtures.scanAll(capture, samples)
         return (f, capture.result!)
     }
 

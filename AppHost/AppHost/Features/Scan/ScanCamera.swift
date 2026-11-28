@@ -13,7 +13,7 @@ final class ScanCamera: ObservableObject {
     private var configured = false
     #if targetEnvironment(simulator)
     private var seedTask: Task<Void, Never>?
-    private var seedFace: CubeFace = .f
+    private var seedFrame: [CubeRGB] = ScanPreviewSeed.image(ScanProtocol.cube3[0])
     #endif
 
     /// Có lớp xem trước camera thật (device) hay không (Simulator: khung giả).
@@ -45,16 +45,28 @@ final class ScanCamera: ObservableObject {
         #endif
     }
 
-    /// Mặt mà bước quét hiện tại chờ — chỉ nguồn giả trên Simulator dùng (đổi lưới sau 0,8 s như người xoay khối).
-    func expect(_ face: CubeFace) {
+    /// Bước quét hiện tại chờ — chỉ nguồn giả trên Simulator dùng (đổi ảnh sau 0,8 s như người xoay khối).
+    func expect(_ step: ScanStep) {
         #if targetEnvironment(simulator)
-        let next = face
-        Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: 800_000_000)
-            self?.seedFace = next
-        }
+        expectFrame(ScanPreviewSeed.image(step))
         #endif
     }
+
+    /// Quét kiểm tra một mặt (lưới theo thứ tự đọc của mặt).
+    func expect(_ face: CubeFace) {
+        #if targetEnvironment(simulator)
+        expectFrame(ScanPreviewSeed.grid(face))
+        #endif
+    }
+
+    #if targetEnvironment(simulator)
+    private func expectFrame(_ next: [CubeRGB]) {
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 800_000_000)
+            self?.seedFrame = next
+        }
+    }
+    #endif
 
     private func configureIfNeeded() {
         guard !configured else { return }
@@ -86,7 +98,7 @@ final class ScanCamera: ObservableObject {
         seedTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 guard let self else { return }
-                self.samples = ScanPreviewSeed.grid(self.seedFace)
+                self.samples = self.seedFrame
                 try? await Task.sleep(nanoseconds: 100_000_000)
             }
         }
