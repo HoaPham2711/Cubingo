@@ -41,6 +41,13 @@ enum FlowRoute: Hashable {
     case mode
     case guide(GuideMode)
     case done
-    /// Quét kiểm tra một mặt sau một chặng của Teach me.
-    case check
+
+    /// Màn có `RealityView`. Bất biến: mỗi chồng điều hướng chỉ có một màn như vậy (`RealityView` thứ hai bị che làm
+    /// màn trên cùng không vẽ).
+    var hasRealityView: Bool {
+        switch self {
+        case .scan, .guide: return true
+        default: return false
+        }
+    }
 }

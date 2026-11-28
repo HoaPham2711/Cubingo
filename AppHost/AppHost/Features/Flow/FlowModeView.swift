@@ -28,11 +28,13 @@ struct FlowModeView: View {
                              subtitle: String(localized: "Learn the beginner method in 7 stages"),
                              detail: teachEstimate.map { String(localized: "About \($0) moves") },
                              icon: "graduationcap.fill", selected: true) {
+                        deps.prefs.lastMode = .teach
                         Task { await flow.startGuide(.teach, quickSolver: deps.quickSolver) }
                     }
                     modeCard(title: String(localized: "Just solve it"),
                              subtitle: String(localized: "Shortest way, about 20 moves"),
                              detail: nil, icon: "bolt.fill", selected: false) {
+                        deps.prefs.lastMode = .quick
                         Task { await flow.startGuide(.quick, quickSolver: deps.quickSolver) }
                     }
                 }
@@ -43,6 +45,18 @@ struct FlowModeView: View {
         }
         .styleBackground()
         .navigationBarTitleDisplayMode(.inline)
+        // Quét xong ⇒ vào thẳng màn giải bằng cách giải lần trước; quay lại từ màn giải thì ở đây để đổi cách.
+        .task {
+            if flow.consumeAutoStart() { await flow.startGuide(deps.prefs.lastMode, quickSolver: deps.quickSolver) }
+        }
+        // Màn quét đã rời chồng (một RealityView mỗi chồng) ⇒ quay lại = quét lại từ đầu.
+        .navigationBarBackButtonHidden(true)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button { flow.rescanFromMode() } label: { Image(systemName: "chevron.left") }
+                    .accessibilityLabel(Text("Scan again"))
+            }
+        }
         .overlay {
             if flow.isSolving {
                 VStack(spacing: 12) {

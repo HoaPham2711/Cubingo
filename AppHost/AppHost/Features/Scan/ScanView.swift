@@ -1,326 +1,160 @@
-import QuartzCore
+import simd
 import SwiftUI
 
-enum ScanCaptureMessage: Equatable { case notFirstSide, alreadyScanned }
-
-/// Quét cả khối (6 mặt) hoặc chỉ một mặt để kiểm tra sau chặng.
-enum ScanMode: Equatable {
-    case full
-    case checkFace(GuideCheckSpec, expected: CubeFacelets)
-}
-
-/// Đi qua `ScanProtocol.cube3`: nhận lưới 9 mẫu mỗi lần chụp, kiểm "đã về mặt đầu" và "mặt đã quét", lắp + phân nhóm
-/// khi đủ 6 mặt.
-@MainActor
-final class ScanCaptureModel: ObservableObject {
-    let steps = ScanProtocol.cube3
-    @Published private(set) var stepIndex = 0
-    @Published private(set) var grids: [CubeFace: [CubeRGB]] = [:]
-    @Published private(set) var message: ScanCaptureMessage?
-    @Published private(set) var result: ScanResult?
-    private var lastCenter: CubeRGB?
-
-    static let sameCenterDeltaE = 10.0
-    static let firstSideDeltaE = 15.0
-
-    var step: ScanStep { steps[min(stepIndex, steps.count - 1)] }
-    var capturedCount: Int { grids.count }
-
-    /// Trung tâm của từng lần chụp đã nhận (để hoàn tác).
-    private var history: [CubeRGB] = []
-    static let flatFaceDeltaE = 12.0
-
-    /// Bắt đầu lại từ đầu (quay về từ màn kiểm tra bằng "Scan again").
-    func reset() {
-        stepIndex = 0
-        grids = [:]
-        message = nil
-        result = nil
-        lastCenter = nil
-        history = []
-    }
-
-    /// Hoàn tác lần chụp gần nhất (chụp nhầm mặt bàn, nhầm mặt…).
-    func undoLast() {
-        guard stepIndex > 0, result == nil else { return }
-        stepIndex -= 1
-        if let face = steps[stepIndex].face { grids[face] = nil }
-        history.removeLast()
-        lastCenter = history.last
-        message = nil
-    }
-
-    var canUndo: Bool { stepIndex > 0 && result == nil }
-
-    /// 9 ô gần như cùng một màu ⇒ nhiều khả năng không phải mặt khối (bàn, trần) — không tự chụp (chụp tay vẫn được,
-    /// mặt đã giải thật cũng đều màu).
-    static func looksFlat(_ s: [CubeRGB]) -> Bool {
-        s.allSatisfy { CubeColorMath.deltaE($0, s[4]) < flatFaceDeltaE }
-    }
-
-    /// Tự chụp chỉ khi tâm đã đổi so với lần chụp trước (người dùng đã xoay khối).
-    func allowsAutoCapture(_ s: [CubeRGB]) -> Bool {
-        guard s.count == 9, result == nil, !Self.looksFlat(s) else { return false }
-        guard let lastCenter else { return true }
-        return CubeColorMath.deltaE(s[4], lastCenter) >= Self.sameCenterDeltaE
-    }
-
-    /// `true` ⇒ đã nhận lưới (sang bước sau).
-    @discardableResult
-    func capture(_ s: [CubeRGB]) -> Bool {
-        guard s.count == 9, result == nil else { return false }
-        if let face = step.face {
-            if grids.values.contains(where: { CubeColorMath.deltaE($0[4], s[4]) < Self.sameCenterDeltaE }) {
-                message = .alreadyScanned
-                return false
-            }
-            grids[face] = s
-        } else {
-            guard let first = grids[.f], CubeColorMath.deltaE(first[4], s[4]) < Self.firstSideDeltaE else {
-                message = .notFirstSide
-                return false
-            }
+/// Chữ của màn quét — CHỈ cho VoiceOver (màn quét không hiện câu hướng dẫn nào).
+enum ScanText {
+    static func turn(_ t: ScanTurn) -> String {
+        switch t {
+        case .none: return String(localized: "Point the camera at any side")
+        case .left: return String(localized: "Next: turn the whole cube left")
+        case .tiltTowardYou: return String(localized: "Next: tilt the top toward you")
+        case .flipTowardYou: return String(localized: "Next: tilt the same way twice to show the bottom")
+        case .tiltAwayFromYou: return String(localized: "Next: tilt the bottom toward you")
         }
-        message = nil
-        lastCenter = s[4]
-        history.append(s[4])
-        stepIndex += 1
-        if stepIndex >= steps.count {
-            let samples = ScanProtocol.assemble(grids)
-            AppInternalScanLog.record(samples)
-            result = ScanClusterer.cluster(samples, n: 3)
-        }
-        return true
+    }
+
+    static func accessibility(step: ScanStep, captured: Int, awaitingTurn: Bool) -> String {
+        if captured >= ScanProtocol.cube3.count { return String(localized: "All 6 sides scanned") }
+        let count = String(localized: "\(captured) of 6 sides scanned.")
+        let next = awaitingTurn ? turn(step.turn) : String(localized: "Hold the side in the frame, then tap Capture")
+        return count + " " + next
     }
 }
 
-/// Màn quét bằng camera: chữ hướng dẫn theo bước, màu sống trong 9 ô, tự chụp khi khung hình đứng yên, nút chụp tay,
-/// mẹo ánh sáng, lối nhập tay.
+/// Màn quét cả khối (spec thiết kế lại màn quét): camera ở trên (iPad ngang: bên trái), khối 3D ở dưới nhận màu camera
+/// sống; nút ✓ chụp từng mặt; chụp xong mũi tên + khối diễn mẫu động tác tới mặt kế tiếp, lặp tới khi người dùng xoay.
 struct ScanView: View {
     @ObservedObject var flow: FlowModel
     let deps: FlowDependencies
-    var mode: ScanMode = .full
-    /// Chế độ kiểm tra: lưới 9 mẫu vừa chụp.
-    var onFace: (([CubeRGB]) -> Void)?
-    var onSkip: (() -> Void)?
-    /// Chế độ kiểm tra: chỉ tự chụp khi mặt đang thấy đúng là mặt được yêu cầu.
-    var acceptsFace: (([CubeRGB]) -> Bool)?
-
-    private var checkFace: CubeFace? {
-        if case let .checkFace(spec, _) = mode { return spec.face }
-        return nil
-    }
 
     @StateObject private var camera = ScanCamera()
     @StateObject private var model = ScanCaptureModel()
-    @State private var stabilizer = ScanStabilizer()
     @State private var tip: ScanLightTip?
+    @State private var arrowToken = 0
+    @State private var poseToken = 0
+    @State private var effect: Cube3DEffect?
+    /// Mặt đã quét đang được quay ra cho người dùng thấy (bấm ✓ trùng mặt đó).
+    @State private var peek: CubeFace?
+
+    static let replaySeconds: UInt64 = 2_500_000_000
 
     var body: some View {
-        VStack(spacing: 16) {
-            if checkFace == nil { progressDots }
-            instruction
-            cameraArea
-            feedback
-            Spacer(minLength: 0)
-            controls
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
-        .frame(maxWidth: 560)
-        .frame(maxWidth: .infinity)
+        ScanSplitLayout(camera: { cameraPanel }, cube: { cubePanel })
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
         .styleBackground()
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
         .onAppear {
-            // Quay lại từ màn kiểm tra ("Scan again") ⇒ quét lại từ đầu.
-            if model.result != nil { model.reset() }
+            applyPreviewPreset()
             camera.start()
-            camera.expect(checkFace ?? model.step.face ?? .f)
+            camera.expect(model.step)
+            // Quay về từ màn đẩy lên trên (nhập tay, kiểm tra màu) ⇒ khoá lại cân bằng trắng nếu đã chụp mặt nào.
+            camera.lockWhiteBalance(model.capturedCount > 0)
         }
         .onDisappear { camera.stop() }
-        // Mọi khung, kể cả khung giống hệt khung trước (đứng yên tuyệt đối): `onChange` bỏ qua giá trị không đổi ⇒ bộ
-        // ổn định không bao giờ đủ 0,6 s.
-        .onReceive(camera.$samples) { handle($0) }
-        .onChange(of: model.stepIndex) { _, _ in camera.expect(model.step.face ?? .f) }
-        .onChange(of: model.result) { _, r in
-            if let r { flow.didScan(r) }
+        .onReceive(camera.$samples) { s in
+            guard s.count == 9 else { return }
+            model.observe(s)
+            tip = ScanLighting.tip(s)
+        }
+        .onChange(of: model.stepIndex) { _, _ in
+            camera.expect(model.step)
+            // Khoá cân bằng trắng từ mặt thứ hai (màu các mặt so được với nhau); quét lại từ đầu ⇒ mở khoá.
+            camera.lockWhiteBalance(model.capturedCount > 0)
+        }
+        // Chưa xoay ⇒ nhắc lại mũi tên và động tác mẫu mỗi 2,5 s.
+        .task(id: model.awaitingTurn) {
+            while model.awaitingTurn, !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: Self.replaySeconds)
+                guard model.awaitingTurn, !Task.isCancelled else { return }
+                arrowToken += 1
+                poseToken += 1
+            }
         }
         .trackScreen("scan_camera")
     }
 
-    // MARK: - Phần
+    // MARK: - Camera
 
-    private var progressDots: some View {
-        HStack(spacing: 8) {
-            ForEach(0..<6, id: \.self) { i in
-                Circle()
-                    .fill(i < model.capturedCount ? DSColor.statusGood : Color.black.opacity(0.12))
-                    .frame(width: 10, height: 10)
+    private var cameraPanel: some View {
+        ScanCameraPanel(camera: camera,
+                        arrow: model.awaitingTurn && model.stepIndex < model.steps.count ? model.step.turn : nil,
+                        arrowToken: arrowToken, tip: tip) {
+            ScanRoundButton(icon: "chevron.left", label: String(localized: "Back")) { flow.scanBack() }
+            Spacer()
+            ScanTorchButton(camera: camera, highlight: tip == .tooDark)
+            ScanRoundButton(icon: "square.grid.3x3", label: String(localized: "Enter colors manually")) {
+                flow.path.append(.review(manual: true))
             }
-        }
-        .accessibilityElement()
-        .accessibilityLabel(Text("\(model.capturedCount) of 6 sides scanned"))
-    }
-
-    private var instructionText: String {
-        switch checkFace {
-        case .d?: return String(localized: "Show us the bottom side")
-        case .u?: return String(localized: "Show us the top side")
-        case .some: return String(localized: "Show us the front side")
-        case nil: return Self.text(model.step.instruction)
-        }
-    }
-
-    private var instruction: some View {
-        HStack(spacing: 12) {
-            Image(systemName: checkFace == nil ? Self.arrow(model.step.instruction) : "checkmark.viewfinder")
-                .scaledFont(size: 28, weight: .bold, design: .rounded)
-                .foregroundColor(DSColor.accent)
-                .frame(width: 44)
-            Text(instructionText)
-                .scaledFont(size: 20, weight: .heavy, design: .rounded)
-                .foregroundColor(DSColor.textPrimary)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
-        }
-    }
-
-    private var cameraArea: some View {
-        GeometryReader { geo in
-            let frame = camera.hasLivePreview
-                ? ScanPreviewLayer.frameRect(in: geo.size)
-                : ScanSampler.frameRect(in: geo.size)
-            ZStack(alignment: .topLeading) {
-                if camera.hasLivePreview {
-                    ScanPreviewLayer(session: camera.session)
-                } else {
-                    Color(hex: 0x2B1D14)
-                }
-                ScanGridOverlay(samples: camera.samples)
-                    .frame(width: frame.width, height: frame.height)
-                    .offset(x: frame.minX, y: frame.minY)
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        }
-        .aspectRatio(3.0 / 4.0, contentMode: .fit)
-        .frame(maxHeight: 520)
-    }
-
-    @ViewBuilder
-    private var feedback: some View {
-        if let m = model.message {
-            label(m == .notFirstSide ? String(localized: "That's not the first side yet")
-                                     : String(localized: "This side was already scanned — turn once more"),
-                  icon: "exclamationmark.circle.fill", color: DSColor.statusWarning)
-        } else if let tip {
-            label(tip == .tooDark ? String(localized: "Face a window or a lamp")
-                                  : String(localized: "Too much glare — tilt the cube slightly"),
-                  icon: "lightbulb.fill", color: DSColor.textSecondary)
-        }
-    }
-
-    private func label(_ text: String, icon: String, color: Color) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: icon)
-            Text(text).fixedSize(horizontal: false, vertical: true)
-        }
-        .scaledFont(size: 16, weight: .semibold, design: .rounded)
-        .foregroundColor(color)
-    }
-
-    private var controls: some View {
-        VStack(spacing: 12) {
-            Button {
-                capture(camera.samples)
-            } label: {
-                ZStack {
-                    Circle().fill(Color.white).frame(width: 72, height: 72)
-                    Circle().strokeBorder(DSColor.accent, lineWidth: 5).frame(width: 72, height: 72)
+            if model.canUndo {
+                ScanRoundButton(icon: "arrow.uturn.backward", label: String(localized: "Undo last side")) {
+                    model.undoLast()
                 }
             }
-            .accessibilityLabel(Text("Capture this side"))
-            if checkFace == nil, model.canUndo {
-                Button("Undo last side") { model.undoLast() }
-                    .scaledFont(size: 15, weight: .semibold, design: .rounded)
+        }
+    }
+
+    // MARK: - Khối
+
+    private var pose: Cube3DPose {
+        if let peek {
+            return Cube3DPose(orientation: model.orientation(of: peek), token: poseToken, viewFromLeft: true)
+        }
+        let i = model.stepIndex
+        let from = model.awaitingTurn && i > 0 && i < model.steps.count ? model.steps[i - 1].orientation : nil
+        return Cube3DPose(orientation: model.pose, replayFrom: from, token: poseToken, viewFromLeft: true,
+                          via: ScanProtocol.flipMidpoint)
+    }
+
+    private var cubePanel: some View {
+        VStack(spacing: 8) {
+            Cube3DView(state: .solved(n: 3), palette: .manualDefault, animation: nil, speed: deps.prefs.speed,
+                       highlight: nil, pose: pose, paint: model.paint, glow: peek ?? model.glowFace, effect: effect,
+                       accessibilityText: ScanText.accessibility(step: model.step, captured: model.capturedCount,
+                                                                 awaitingTurn: model.awaitingTurn))
+                .aspectRatio(1, contentMode: .fit)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            ZStack {
+                ScanShutterButton(ready: model.live.count == 9 || model.capturedCount == model.steps.count,
+                                  action: press)
+                Text(verbatim: "\(model.capturedCount)/6")
+                    .scaledFont(size: 15, weight: .bold, design: .rounded)
                     .foregroundColor(DSColor.textSecondary)
-            }
-            if checkFace != nil {
-                Button("Skip") { onSkip?() }
-                    .scaledFont(size: 16, weight: .semibold, design: .rounded)
-                    .foregroundColor(DSColor.accentDark)
-            } else {
-                Button("Enter colors manually") { flow.path.append(.review(manual: true)) }
-                    .scaledFont(size: 16, weight: .semibold, design: .rounded)
-                    .foregroundColor(DSColor.accentDark)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .accessibilityHidden(true)
             }
         }
     }
 
-    // MARK: - Logic
-
-    private func handle(_ s: [CubeRGB]) {
-        guard s.count == 9 else { return }
-        tip = ScanLighting.tip(s)
-        guard stabilizer.feed(s, at: CACurrentMediaTime()) else { return }
-        let allowed = checkFace != nil
-            ? (!ScanCaptureModel.looksFlat(s) || acceptsFace != nil) && (acceptsFace?(s) ?? true)
-            : model.allowsAutoCapture(s)
-        if allowed { capture(s) } else { stabilizer.reset() }
-    }
-
-    private func capture(_ s: [CubeRGB]) {
-        if checkFace != nil {
-            guard s.count == 9 else { return }
+    private func press() {
+        switch model.capture() {
+        case .accepted:
             deps.haptic(.capture)
-            onFace?(s)
-            stabilizer.reset()
-            return
-        }
-        if model.capture(s) { deps.haptic(.capture) }
-        stabilizer.reset()
-    }
-
-    static func text(_ i: ScanInstruction) -> String {
-        switch i {
-        case .start: return String(localized: "Point the camera at any side")
-        case .turnLeft: return String(localized: "Turn the cube left — the next center should face you")
-        case .backToFirst: return String(localized: "Turn left once more — the first side faces you again")
-        case .tiltTopToYou: return String(localized: "Tilt the top toward you")
-        case .tiltBottomToYou: return String(localized: "Tilt the other way to show the bottom")
-        }
-    }
-
-    static func arrow(_ i: ScanInstruction) -> String {
-        switch i {
-        case .start: return "viewfinder"
-        case .turnLeft: return "arrow.left"
-        case .backToFirst: return "arrow.uturn.left"
-        case .tiltTopToYou: return "arrow.down"
-        case .tiltBottomToYou: return "arrow.up"
-        }
-    }
-}
-
-/// Lưới 3×3 trên khung lấy mẫu: viền trắng + chấm màu sống của từng ô.
-private struct ScanGridOverlay: View {
-    let samples: [CubeRGB]
-
-    var body: some View {
-        GeometryReader { geo in
-            let cell = geo.size.width / 3
-            ForEach(0..<9, id: \.self) { i in
-                let c = i < samples.count ? samples[i] : CubeRGB(r: 0.5, g: 0.5, b: 0.5)
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.9), lineWidth: 2)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .fill(Color(.sRGB, red: c.r, green: c.g, blue: c.b, opacity: 1))
-                            .frame(width: cell * 0.36, height: cell * 0.36)
-                    )
-                    .frame(width: cell - 6, height: cell - 6)
-                    .position(x: cell * (CGFloat(i % 3) + 0.5), y: cell * (CGFloat(i / 3) + 0.5))
+            arrowToken += 1
+        case .duplicate(let face):
+            deps.haptic(.warning)
+            let ix = model.steps.first { $0.face == face }?.image ?? []
+            // Mặt trùng có thể đang ở phía khuất ⇒ quay khối cho thấy nó, nháy đỏ, rồi quay về.
+            effect = Cube3DEffect(kind: .shake, token: (effect?.token ?? 0) + 1)
+            peek = face
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: UInt64(Cube3DPose.turnSeconds * 1_000_000_000))
+                effect = Cube3DEffect(kind: .flash(ix), token: (effect?.token ?? 0) + 1)
+                try? await Task.sleep(nanoseconds: 800_000_000)
+                if peek == face { peek = nil }
             }
+        case .finished(let r):
+            deps.haptic(.success)
+            flow.didScan(r)
+        case .notReady:
+            break
         }
-        .accessibilityHidden(true)
+    }
+
+    private func applyPreviewPreset() {
+        #if targetEnvironment(simulator)
+        ScanPreviewSeed.apply(to: model, camera: camera)
+        #endif
     }
 }

@@ -6,6 +6,14 @@ import QuartzCore
 @MainActor
 final class ScanCamera: ObservableObject {
     @Published private(set) var samples: [CubeRGB] = []
+    @Published private(set) var torchOn = false
+    private var device: AVCaptureDevice?
+    /// Hệ số cân bằng trắng của lần khoá đầu — khoá lại (quay về màn quét, Undo) dùng đúng hệ số này để mọi mặt cùng
+    /// một hệ màu. Chỉ quên khi mở khoá hẳn (quét lại từ đầu).
+    private var lockedGains: AVCaptureDevice.WhiteBalanceGains?
+
+    /// Máy có đèn pin (Simulator: không).
+    var hasTorch: Bool { device?.hasTorch ?? false }
 
     let session = AVCaptureSession()
     private let queue = DispatchQueue(label: "scan.camera")
@@ -13,7 +21,7 @@ final class ScanCamera: ObservableObject {
     private var configured = false
     #if targetEnvironment(simulator)
     private var seedTask: Task<Void, Never>?
-    private var seedFace: CubeFace = .f
+    private var seedFrame: [CubeRGB] = ScanPreviewSeed.image(ScanProtocol.cube3[0])
     #endif
 
     /// Có lớp xem trước camera thật (device) hay không (Simulator: khung giả).
@@ -35,7 +43,42 @@ final class ScanCamera: ObservableObject {
         #endif
     }
 
+    /// Khoá cân bằng trắng sau mặt đầu: camera tự chỉnh trắng theo từng mặt làm cùng một màu lệch nhau giữa các mặt.
+    func lockWhiteBalance(_ locked: Bool) {
+        if !locked { lockedGains = nil }
+        applyWhiteBalance(locked)
+    }
+
+    private func applyWhiteBalance(_ locked: Bool) {
+        guard let device, (try? device.lockForConfiguration()) != nil else { return }
+        defer { device.unlockForConfiguration() }
+        guard locked else {
+            if device.isWhiteBalanceModeSupported(.continuousAutoWhiteBalance) {
+                device.whiteBalanceMode = .continuousAutoWhiteBalance
+            }
+            return
+        }
+        guard device.isWhiteBalanceModeSupported(.locked) else { return }
+        if let g = lockedGains {
+            device.setWhiteBalanceModeLocked(with: g)
+        } else {
+            device.whiteBalanceMode = .locked
+            lockedGains = device.deviceWhiteBalanceGains
+        }
+    }
+
+    /// Bật / tắt đèn pin (phòng tối).
+    func setTorch(_ on: Bool) {
+        guard let device, device.hasTorch, (try? device.lockForConfiguration()) != nil else { return }
+        defer { device.unlockForConfiguration() }
+        if on { try? device.setTorchModeOn(level: 0.6) } else { device.torchMode = .off }
+        torchOn = on && device.torchMode == .on
+    }
+
     func stop() {
+        setTorch(false)
+        // Rời màn (đẩy màn khác lên) ⇒ trả camera về tự chỉnh nhưng NHỚ hệ số để khoá lại khi quay về.
+        applyWhiteBalance(false)
         #if targetEnvironment(simulator)
         seedTask?.cancel()
         seedTask = nil
@@ -45,16 +88,33 @@ final class ScanCamera: ObservableObject {
         #endif
     }
 
-    /// Mặt mà bước quét hiện tại chờ — chỉ nguồn giả trên Simulator dùng (đổi lưới sau 0,8 s như người xoay khối).
-    func expect(_ face: CubeFace) {
+    /// Bước quét hiện tại chờ — chỉ nguồn giả trên Simulator dùng (đổi ảnh sau 0,8 s như người xoay khối).
+    func expect(_ step: ScanStep) {
         #if targetEnvironment(simulator)
-        let next = face
-        Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: 800_000_000)
-            self?.seedFace = next
-        }
+        expectFrame(ScanPreviewSeed.image(step))
         #endif
     }
+
+    /// Quét kiểm tra một mặt (lưới theo thứ tự đọc của mặt).
+    func expect(_ face: CubeFace) {
+        #if targetEnvironment(simulator)
+        expectFrame(ScanPreviewSeed.checkImage(face))
+        #endif
+    }
+
+    #if targetEnvironment(simulator)
+    /// Có giá trị ⇒ nguồn giả của CAMERA NÀY luôn phát đúng khung này (giữ trạng thái để chụp ảnh UI).
+    private var frozenFrame: [CubeRGB]?
+
+    func freezeSeed(_ frame: [CubeRGB]) { frozenFrame = frame }
+
+    private func expectFrame(_ next: [CubeRGB]) {
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 800_000_000)
+            self?.seedFrame = next
+        }
+    }
+    #endif
 
     private func configureIfNeeded() {
         guard !configured else { return }
@@ -67,6 +127,7 @@ final class ScanCamera: ObservableObject {
             return
         }
         session.addInput(input)
+        self.device = device
         let output = AVCaptureVideoDataOutput()
         output.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
         output.alwaysDiscardsLateVideoFrames = true
@@ -86,7 +147,7 @@ final class ScanCamera: ObservableObject {
         seedTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 guard let self else { return }
-                self.samples = ScanPreviewSeed.grid(self.seedFace)
+                self.samples = self.frozenFrame ?? self.seedFrame
                 try? await Task.sleep(nanoseconds: 100_000_000)
             }
         }

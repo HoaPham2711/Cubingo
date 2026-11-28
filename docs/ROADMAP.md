@@ -5,6 +5,15 @@ trong `docs/superpowers/`. Mẫu tiêu đề: `## <ngày> — <tiêu đề> (<nh
 bằng `python3 tools/factory/roadmap.py debt`. App sinh từ template tag `v0.6.0-1-g20b1621` ngày 2026-11-27; việc tay trước bản
 đầu tiên ở `docs/NEW_APP_CHECKLIST.md`.
 
+## 2026-11-28 — Thiết kế lại màn quét: khối 3D sống, nút ✓, mũi tên (claude/scan-redesign, chưa merge, chưa device)
+
+Màn quét "không cần đọc chữ": camera ở trên, khối 3D RealityKit ở dưới nhận màu camera sống; bấm ✓ từng mặt; mũi tên
+cong + khối diễn mẫu động tác tới mặt kế tiếp. 6 lần bấm (bỏ bước quay về mặt đầu), hướng lưới U/D tính từ hướng khối.
+Quét hợp lệ đi thẳng sang màn chọn cách giải; quét kiểm tra sau chặng làm ngay trong màn giải. Điều hướng THAY `path`
+để luôn chỉ một RealityView mỗi chồng. Spec `docs/superpowers/specs/2026-11-28-cubingo-scan-redesign-design.md`, plan
+`docs/superpowers/plans/2026-11-28-cubingo-scan-redesign.md`. Kế tiếp: user thử trên BonGao, rồi áp nguyên tắc hình ảnh
+cho màn chỉ bước giải.
+
 ## 2026-11-27 — Đợt A: 3×3 trọn vẹn đã code xong, chờ thử device (claude/plan-dot-a, chưa merge, chưa device)
 
 Luồng chọn khối → quét (camera, tự chụp, phân nhóm Hungarian) / nhập tay → kiểm tra → Teach me (7 chặng, daisy, quét

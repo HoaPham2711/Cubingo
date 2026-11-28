@@ -29,6 +29,10 @@ final class FlowModel: ObservableObject {
     @Published private(set) var isSolving = false
     /// Đang quét lại cả khối sau quét kiểm tra lệch (kết quả kiểm tra ⇒ lập lại lời giải, không mở phiên mới).
     @Published private(set) var isRechecking = false
+    /// Đổi ⇒ màn quét dựng mới (quét lại từ đầu thay vì về đúng chỗ đang dở).
+    @Published private(set) var scanGeneration = 0
+    /// Vừa quét xong một khối chưa giải ⇒ màn chọn cách giải tự mở màn giải (một lần).
+    private var autoStartPending = false
 
     /// Chỉ nhận khối đang có; đẩy màn quét.
     func choose(_ p: FlowPuzzle) {
@@ -37,14 +41,45 @@ final class FlowModel: ObservableObject {
         path = [.scan]
     }
 
-    /// Quét xong ⇒ màn kiểm tra màu.
-    func didScan(_ r: ScanResult) {
-        scan = r
-        path.append(.review(manual: false))
+    /// Nút quay lại của màn quét: đang quét lại sau quét kiểm tra lệch ⇒ về màn giải với phiên cũ; ngược lại ⇒ màn
+    /// chọn khối.
+    func scanBack() {
+        if isRechecking, session != nil {
+            isRechecking = false
+            path = [.mode, .guide(.teach)]
+        } else {
+            isRechecking = false
+            path = []
+        }
     }
 
-    /// Khối hợp lệ ⇒ màn chọn cách giải.
+    /// Quét xong: khối hợp lệ (hoặc tự sửa được hướng U/D) ⇒ đi thẳng; có lỗi ⇒ màn kiểm tra màu (không có
+    /// `RealityView`, được tạm nằm trên màn quét).
+    func didScan(_ r: ScanResult) {
+        // Bấm ✓ lặp ở 6/6 khi màn khác đã đẩy lên / luồng đã đi tiếp ⇒ bỏ qua.
+        guard path.last == .scan else { return }
+        scan = r
+        let review = ScanReviewModel(scan: r)
+        switch review.validate() {
+        case .ok(let f), .autoFixed(let f):
+            finishScan(f, palette: review.palette, white: review.whiteReference)
+        default:
+            path.append(.review(manual: false))
+        }
+    }
+
+    /// Khối hợp lệ từ màn kiểm tra / nhập tay.
     func didReview(_ f: CubeFacelets, palette: CubePalette, white: CubeRGB? = nil) {
+        switch path.last {
+        case .scan?, .review?: break
+        default: return
+        }
+        finishScan(f, palette: palette, white: white)
+    }
+
+    /// THAY `path` (không chồng): quét lại sau kiểm tra lệch ⇒ màn giải; ngược lại ⇒ màn chọn cách giải. Màn quét
+    /// không còn trong chồng ⇒ màn giải đẩy lên sau vẫn là `RealityView` duy nhất.
+    private func finishScan(_ f: CubeFacelets, palette: CubePalette, white: CubeRGB?) {
         whiteReference = white
         if isRechecking, let old = session {
             replan(from: f, palette: palette, old: old)
@@ -52,7 +87,29 @@ final class FlowModel: ObservableObject {
         }
         cube = f
         self.palette = palette
-        path.append(.mode)
+        autoStartPending = !f.isSolved
+        path = [.mode]
+    }
+
+    /// `true` đúng một lần sau khi quét xong ⇒ màn chọn cách giải tự mở màn giải bằng cách giải lần trước.
+    func consumeAutoStart() -> Bool {
+        defer { autoStartPending = false }
+        return autoStartPending
+    }
+
+    /// Nút quay lại của màn chọn cách giải ⇒ quét lại từ đầu.
+    func rescanFromMode() {
+        scan = nil
+        cube = nil
+        scanGeneration += 1
+        path = [.scan]
+    }
+
+    /// "Scan again" ở màn kiểm tra màu ⇒ quét mới từ đầu.
+    func rescanFromReview() {
+        scan = nil
+        scanGeneration += 1
+        path = [.scan]
     }
 
     /// Dựng lời giải và mở màn chỉ bước. Teach me: 7 chặng từ màu nền của bảng màu. Just solve it: một chặng gói
@@ -84,16 +141,9 @@ final class FlowModel: ObservableObject {
         path.append(.guide(s.mode))
     }
 
-    /// Quét kiểm tra sau chặng.
-    func startCheck() {
-        guard path.last != .check else { return }
-        path.append(.check)
-    }
-
-    /// Mặt chụp khớp ⇒ sang chặng sau, về màn chỉ bước.
+    /// Quét kiểm tra (ngay trong màn giải) khớp ⇒ sang chặng sau.
     func checkMatched() {
         session?.continueAfterStage()
-        if path.last == .check { path.removeLast() }
     }
 
     /// Bỏ qua kiểm tra (cả khi lệch).
@@ -102,7 +152,8 @@ final class FlowModel: ObservableObject {
     /// Lệch ⇒ quét lại cả khối.
     func startRescan() {
         isRechecking = true
-        path.append(.scan)
+        scanGeneration += 1
+        path = [.scan]
     }
 
     /// Lời giải mới từ trạng thái vừa quét lại. Màu nền giữ đúng MÀU THẬT của phiên (nhãn có thể đổi vì lần quét này
@@ -121,7 +172,8 @@ final class FlowModel: ObservableObject {
             session = GuideSession(mode: .teach, stages: stages, base: base)
         }
         isRechecking = false
-        if let i = path.lastIndex(of: .guide(.teach)) { path = Array(path.prefix(through: i)) }
+        // Màn chọn cách giải không có RealityView ⇒ được nằm dưới màn giải (quay lại từ màn giải vẫn về đó).
+        path = [.mode, .guide(.teach)]
     }
 
     /// Phiên xong ⇒ màn ăn mừng.

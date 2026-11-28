@@ -23,6 +23,9 @@ enum GuidePreviewSeed {
     }
 
     /// Vừa xong chặng 1.
+    /// Route `guideCheck`: mở thẳng quét kiểm tra ở màn xong chặng.
+    static var openCheck = false
+
     static func stageDone() -> GuideSession {
         let s = teachSession()
         while s.phase == .step { s.next() }

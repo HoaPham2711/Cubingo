@@ -7,17 +7,32 @@ struct GuideView: View {
     let palette: CubePalette
     @ObservedObject var prefs: PrefsStore
     let onFinish: () -> Void
-    /// `nil` ⇒ ẩn nút "Check my cube".
-    var onCheck: (() -> Void)?
+    /// Quét kiểm tra sau chặng (Teach me). `nil` ⇒ ẩn nút "Check my cube".
+    var check: GuideCheckHooks?
 
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var showNotation = false
+    /// Đang quét kiểm tra ngay trong màn này (camera + khối, ẩn thẻ bước và nút điều khiển).
+    @State private var checking = false
+    /// Tự chạy liên tiếp từng bước (kèm thế hệ: lượt chờ cũ không chạy sau Pause → Play).
+    @State private var clock = GuideAutoplay.Clock()
+    private var autoplay: Bool { clock.isOn }
+    @State private var autoplayTick = 0
+    /// Tăng khi Pause ⇒ khối dừng quay ngay.
+    @State private var stopToken = 0
 
     private var top: CubeColor { SolverPieces.opposite(of: session.base, in: session.state) }
 
     var body: some View {
         Group {
-            if sizeClass == .regular {
+            if checking, let check, case .stageDone(let kind) = session.phase {
+                GuideCheckPanel(session: session, kind: kind, palette: palette, white: check.white, deps: check.deps,
+                                onMatched: { checking = false; check.onMatched() },
+                                onSkip: { checking = false; check.onSkipped() },
+                                onRescan: { checking = false; check.onRescan() })
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+            } else if sizeClass == .regular {
                 HStack(alignment: .top, spacing: 24) {
                     VStack(spacing: 14) {
                         header
@@ -32,14 +47,20 @@ struct GuideView: View {
                 }
                 .padding(24)
             } else {
-                ScrollView {
-                    VStack(spacing: 14) {
-                        header
-                        cube.frame(height: 320)
-                        panel
+                // Khối lấy hết chỗ trống còn lại (tối thiểu 320 pt); chữ to quá thì cuộn.
+                GeometryReader { geo in
+                    ScrollView {
+                        VStack(spacing: 14) {
+                            header
+                            cube.frame(minHeight: 320, maxHeight: .infinity)
+                            panel
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 8)
+                        .frame(minHeight: geo.size.height)
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 8)
+                    // Vừa màn ⇒ không cuộn, để kéo dọc trên khối là xoay khối (không giành với ScrollView).
+                    .scrollBounceBehavior(.basedOnSize)
                 }
             }
         }
@@ -60,8 +81,18 @@ struct GuideView: View {
             }
         }
         .sheet(isPresented: $showNotation) { GuideNotationSheet() }
+        .onAppear(perform: openCheckForPreview)
         .onChange(of: session.phase, initial: true) { _, phase in
+            if phase != .step { clock.stop() }
             if phase == .finished { onFinish() }
+        }
+        // Một bước quay xong ⇒ chờ một nhịp rồi tự làm bước kế (nếu vẫn đang tự chạy).
+        .task(id: autoplayTick) {
+            guard autoplay, autoplayTick > 0 else { return }
+            let generation = clock.generation
+            try? await Task.sleep(nanoseconds: UInt64(GuideAutoplay.gap(prefs.speed) * 1_000_000_000))
+            guard clock.mayTick(generation), !Task.isCancelled else { return }
+            if !GuideAutoplay.tick(session) { clock.stop() }
         }
         .trackScreen("guide_steps")
     }
@@ -95,8 +126,9 @@ struct GuideView: View {
 
     private var cube: some View {
         Cube3DView(state: session.state, palette: palette, animation: session.animation, speed: prefs.speed,
-                   highlight: session.currentStep?.move)
-            .frame(maxWidth: .infinity, maxHeight: 520)
+                   highlight: session.currentStep?.move, stopToken: stopToken,
+                   onAnimationEnd: { if autoplay { autoplayTick += 1 } })
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     @ViewBuilder
@@ -106,7 +138,7 @@ struct GuideView: View {
             GuideStageDoneView(kind: kind,
                                title: GuideText.stageTitle(kind, base: palette.name(session.base), top: palette.name(top)),
                                goal: GuideText.stageGoal(kind, base: palette.name(session.base), top: palette.name(top)),
-                               onCheck: onCheck,
+                               onCheck: check.map { c in { startCheck(c) } },
                                onSkip: { session.continueAfterStage() })
             controls(nextEnabled: false)
         case .finished:
@@ -127,18 +159,34 @@ struct GuideView: View {
 
     private func controls(nextEnabled: Bool) -> some View {
         HStack(spacing: 12) {
-            Button { session.back() } label: { Image(systemName: "chevron.backward") }
+            Button { clock.stop(); session.back() } label: { Image(systemName: "chevron.backward") }
                 .buttonStyle(StyleThickButton(kind: .secondary))
-                .frame(width: 72)
+                .frame(width: 64)
                 .accessibilityLabel(Text("Back"))
-            Button { session.replay() } label: { Image(systemName: "arrow.counterclockwise") }
+            Button { clock.stop(); session.replay() } label: { Image(systemName: "arrow.counterclockwise") }
                 .buttonStyle(StyleThickButton(kind: .secondary))
-                .frame(width: 72)
+                .frame(width: 64)
                 .accessibilityLabel(Text("Replay"))
-            Button("Next") { session.next() }
+            Button { toggleAutoplay() } label: { Image(systemName: autoplay ? "pause.fill" : "play.fill") }
+                .buttonStyle(StyleThickButton(kind: .secondary))
+                .frame(width: 64)
+                .disabled(!nextEnabled)
+                .opacity(nextEnabled ? 1 : 0.4)
+                .accessibilityLabel(Text(autoplay ? "Pause" : "Play all steps"))
+            Button("Next") { clock.stop(); session.next() }
                 .buttonStyle(StyleThickButton())
                 .disabled(!nextEnabled)
                 .opacity(nextEnabled ? 1 : 0.4)
+        }
+    }
+
+    private func toggleAutoplay() {
+        if autoplay {
+            clock.stop()
+            stopToken += 1
+        } else {
+            clock.start()
+            if !GuideAutoplay.tick(session) { clock.stop() }
         }
     }
 
@@ -167,6 +215,18 @@ struct GuideView: View {
         }
     }
 
+    // MARK: - Quét kiểm tra
+
+    private func startCheck(_ c: GuideCheckHooks) {
+        if c.deps.cameraAuth.status() == .authorized { checking = true } else { c.onSkipped() }
+    }
+
+    private func openCheckForPreview() {
+        #if targetEnvironment(simulator)
+        if GuidePreviewSeed.openCheck, let check { startCheck(check) }
+        #endif
+    }
+
     // MARK: - Chữ
 
     /// Chip hiện ở bước đầu mỗi chặng (và luôn ở bước đầu Just solve it) và ở mọi bước xoay cả khối.
@@ -191,4 +251,13 @@ struct GuideView: View {
         if case .hold = r { return true }
         return false
     }
+}
+
+/// Những gì màn giải cần để quét kiểm tra sau chặng.
+struct GuideCheckHooks {
+    let deps: FlowDependencies
+    let white: CubeRGB?
+    let onMatched: () -> Void
+    let onSkipped: () -> Void
+    let onRescan: () -> Void
 }

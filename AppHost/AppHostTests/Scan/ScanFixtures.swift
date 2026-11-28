@@ -46,3 +46,21 @@ extension ScanFixtures.Condition {
     static var coolLED: Self { ScanFixtures.coolLED }
     static var dim: Self { ScanFixtures.dim }
 }
+
+extension ScanFixtures {
+    /// Ảnh camera của một bước quét (thứ tự đọc ảnh) cắt từ 54 mẫu thứ tự Kociemba.
+    static func image(_ samples: [CubeRGB], step: ScanStep) -> [CubeRGB] { step.image.map { samples[$0] } }
+
+    /// Đưa ảnh vào camera vài khung (màu sống hội tụ) rồi bấm ✓.
+    @MainActor @discardableResult
+    static func press(_ m: ScanCaptureModel, _ img: [CubeRGB]) -> ScanCaptureOutcome {
+        for _ in 0..<30 { m.observe(img) }
+        return m.capture()
+    }
+
+    /// Quét đủ 6 bước theo giao thức.
+    @MainActor
+    static func scanAll(_ m: ScanCaptureModel, _ samples: [CubeRGB]) {
+        for st in ScanProtocol.cube3 { press(m, image(samples, step: st)) }
+    }
+}

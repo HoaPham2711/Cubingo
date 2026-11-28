@@ -30,8 +30,19 @@ final class PrefsStoreTests: XCTestCase {
     }
 
     func testThoiLuongXoayTheoTocDo() {
-        XCTAssertEqual(PrefsSpeed.slow.quarterTurnSeconds, 0.9)
-        XCTAssertEqual(PrefsSpeed.medium.quarterTurnSeconds, 0.5)
-        XCTAssertEqual(PrefsSpeed.fast.quarterTurnSeconds, 0.25)
+        // Người dùng thử máy thật: 0,5 s quá nhanh để kịp nhìn ⇒ chậm hơn ở mọi mức.
+        XCTAssertEqual(PrefsSpeed.slow.quarterTurnSeconds, 1.4)
+        XCTAssertEqual(PrefsSpeed.medium.quarterTurnSeconds, 0.9)
+        XCTAssertEqual(PrefsSpeed.fast.quarterTurnSeconds, 0.5)
+        // Dừng một nhịp có mũi tên trước khi quay.
+        XCTAssertEqual(PrefsSpeed.medium.leadInSeconds, 0.45, accuracy: 1e-9)
+    }
+
+    // Quét xong vào thẳng màn giải bằng cách giải dùng lần trước (mặc định Just solve it).
+    func testNhoCachGiaiLanTruoc() {
+        let store = PrefsStore(defaults: defaults)
+        XCTAssertEqual(store.lastMode, .quick)
+        store.lastMode = .teach
+        XCTAssertEqual(PrefsStore(defaults: defaults).lastMode, .teach)
     }
 }

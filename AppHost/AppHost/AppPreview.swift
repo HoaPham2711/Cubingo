@@ -10,7 +10,7 @@ import SwiftUI
 enum AppPreview: String, UIPreviewRoute {
     case home, onboarding, settings, paywall, whatsNew, feedback
     // Route của tính năng (sau sáu route khung).
-    case scan, review, mode, guide, guideStageDone, done
+    case scan, scanTurn, review, mode, guide, guideStageDone, guideCheck, done
 
     var isOnboarding: Bool {
         switch self {
@@ -81,16 +81,23 @@ enum AppPreviewSeed {
     static func prepareFlow(_ flow: FlowModel) {
         guard flow.path.isEmpty else { return }
         switch AppPreview.current {
-        case .scan: flow.choose(.cube3)
+        case .scan, .scanTurn:
+            ScanPreviewSeed.preset = AppPreview.current == .scan ? .midScan : .turning
+            flow.choose(.cube3)
         case .review:
             flow.choose(.cube3)
             flow.didScan(ScanPreviewSeed.scanResultWithMistake)
-        case .mode, .guide, .guideStageDone, .done:
+        case .mode, .guide, .guideStageDone, .guideCheck, .done:
             flow.choose(.cube3)
             flow.didReview(ScanPreviewSeed.state, palette: .manualDefault)
+            // Route `mode` chụp màn chọn cách giải ⇒ không tự vào màn giải.
+            _ = flow.consumeAutoStart()
             switch AppPreview.current {
             case .guide: flow.begin(GuidePreviewSeed.midMiddleLayer())
             case .guideStageDone: flow.begin(GuidePreviewSeed.stageDone())
+            case .guideCheck:
+                GuidePreviewSeed.openCheck = true
+                flow.begin(GuidePreviewSeed.stageDone())
             case .done:
                 flow.begin(GuidePreviewSeed.finishedQuick())
                 flow.didFinishGuide()

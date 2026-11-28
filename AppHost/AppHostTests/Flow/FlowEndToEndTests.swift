@@ -1,7 +1,7 @@
 @testable import AppHost
 import XCTest
 
-/// Đi hết luồng bằng logic thật (không UI): quét 7 bước từ mẫu màu ⇒ kiểm tra ⇒ chọn cách giải ⇒ chỉ bước tới xong.
+/// Đi hết luồng bằng logic thật (không UI): quét 6 bước từ mẫu màu ⇒ kiểm tra ⇒ chọn cách giải ⇒ chỉ bước tới xong.
 /// Bằng chứng tích hợp cho Đợt A (các màn chỉ là lớp mỏng gọi đúng các hàm này).
 @MainActor
 final class FlowEndToEndTests: XCTestCase {
@@ -10,9 +10,7 @@ final class FlowEndToEndTests: XCTestCase {
         let f = CubeRandom.state(using: &rng).facelets(centers: cubeStandardCenters)
         let samples = ScanFixtures.samples(for: f, palette: .manualDefault, .warmLamp, seed: seed)
         let capture = ScanCaptureModel()
-        for face: CubeFace in [.f, .r, .b, .l, .f, .u, .d] {
-            capture.capture(Array(samples[(face.rawValue * 9)..<(face.rawValue * 9 + 9)]))
-        }
+        ScanFixtures.scanAll(capture, samples)
         return (f, capture.result!)
     }
 
@@ -21,11 +19,9 @@ final class FlowEndToEndTests: XCTestCase {
         let flow = FlowModel()
         flow.choose(.cube3)
         flow.didScan(result)
-        XCTAssertEqual(flow.path, [.scan, .review(manual: false)])
-        let review = ScanReviewModel(scan: flow.scan!)
-        guard case .ok(let cube) = review.validate() else { return XCTFail("quét phải hợp lệ") }
-        XCTAssertEqual(cube, f)
-        flow.didReview(cube, palette: review.palette)
+        // Quét hợp lệ ⇒ đi thẳng sang màn chọn cách giải (không qua màn kiểm tra).
+        XCTAssertEqual(flow.path, [.mode])
+        XCTAssertEqual(flow.cube, f)
         XCTAssertEqual(flow.palette?.colorName(flow.palette!.baseColor), .white)
         await flow.startGuide(.teach, quickSolver: SolverQuick(tables: { solverTestTables }))
         let s = flow.session!
@@ -41,7 +37,6 @@ final class FlowEndToEndTests: XCTestCase {
                 let samples = (0..<9).map { flow.palette!.rgb(s.state.color(spec.face, $0)) }
                 XCTAssertEqual(GuideCheckFlow.outcome(samples: samples, palette: flow.palette!, spec: spec,
                                                       expected: s.state), .match)
-                flow.startCheck()
                 flow.checkMatched()
             case .finished: break
             }

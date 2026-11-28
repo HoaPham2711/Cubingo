@@ -18,34 +18,34 @@ final class ReviewFixTests: XCTestCase {
 
     // #1 "Scan again" quay về màn quét cũ đã có kết quả ⇒ phải chụp lại được.
     func testQuetLaiSauKhiCoKetQua() {
-        let g = grids(scrambled(1))
+        var rng = CubeRandom(seed: 1)
+        let f = CubeRandom.state(using: &rng).facelets(centers: cubeStandardCenters)
+        let s = ScanFixtures.samples(for: f, palette: .manualDefault, .daylight, seed: 1)
         let m = ScanCaptureModel()
-        for face: CubeFace in [.f, .r, .b, .l, .f, .u, .d] { m.capture(g[face]!) }
+        ScanFixtures.scanAll(m, s)
         XCTAssertNotNil(m.result)
         m.reset()
         XCTAssertNil(m.result)
         XCTAssertEqual(m.capturedCount, 0)
-        XCTAssertTrue(m.allowsAutoCapture(g[.f]!))
-        XCTAssertTrue(m.capture(g[.f]!))
+        XCTAssertEqual(ScanFixtures.press(m, ScanFixtures.image(s, step: ScanProtocol.cube3[0])), .accepted)
     }
 
-    // #2 Khung không phải khối (bàn, trần) không được tự chụp; chụp nhầm thì hoàn tác được.
-    func testKhungKhongPhaiKhoiVaHoanTac() {
-        let flat = Array(repeating: CubeRGB(r: 0.55, g: 0.5, b: 0.45), count: 9)
+    // #2 Chụp nhầm thì hoàn tác được; mặt đã giải (9 ô cùng màu) vẫn chụp được.
+    func testHoanTacVaMatDeuMau() {
+        var rng = CubeRandom(seed: 2)
+        let f = CubeRandom.state(using: &rng).facelets(centers: cubeStandardCenters)
+        let s = ScanFixtures.samples(for: f, palette: .manualDefault, .daylight, seed: 1)
+        let st = ScanProtocol.cube3
         let m = ScanCaptureModel()
-        XCTAssertFalse(m.allowsAutoCapture(flat), "9 ô gần như cùng màu ⇒ không phải mặt khối")
-        let g = grids(scrambled(2))
-        m.capture(g[.f]!)
-        m.capture(g[.r]!)
+        ScanFixtures.press(m, ScanFixtures.image(s, step: st[0]))
+        ScanFixtures.press(m, ScanFixtures.image(s, step: st[1]))
         XCTAssertEqual(m.capturedCount, 2)
         m.undoLast()
         XCTAssertEqual(m.capturedCount, 1)
         XCTAssertEqual(m.step.face, .r)
-        XCTAssertTrue(m.capture(g[.r]!))
-        // Mặt đã giải (9 ô cùng màu thật) vẫn chụp tay được.
-        let solved = grids(.solved(n: 3))
-        let m2 = ScanCaptureModel()
-        XCTAssertTrue(m2.capture(solved[.f]!))
+        XCTAssertEqual(ScanFixtures.press(m, ScanFixtures.image(s, step: st[1])), .accepted)
+        let solved = ScanFixtures.samples(for: .solved(n: 3), palette: .manualDefault, .daylight, seed: 1)
+        XCTAssertEqual(ScanFixtures.press(ScanCaptureModel(), ScanFixtures.image(solved, step: st[0])), .accepted)
     }
 
     // #3 Quét kiểm tra chỉ tự chụp khi tâm khớp tâm của mặt được yêu cầu.

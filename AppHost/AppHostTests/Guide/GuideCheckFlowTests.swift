@@ -51,8 +51,6 @@ final class GuideCheckFlowTests: XCTestCase {
         flow.begin(GuideSession(mode: .teach, stages: SolverBeginner.solve(start, base: base), base: base))
         let s = flow.session!
         while s.phase == .step { s.next() }
-        flow.startCheck()
-        XCTAssertEqual(flow.path.last, .check)
         flow.checkMatched()
         XCTAssertEqual(flow.path.last, .guide(.teach))
         XCTAssertEqual(s.phase, .step)
@@ -69,7 +67,6 @@ final class GuideCheckFlowTests: XCTestCase {
         flow.begin(GuideSession(mode: .teach, stages: SolverBeginner.solve(start, base: base), base: base))
         let s = flow.session!
         while s.phase == .step { s.next() }
-        flow.startCheck()
         // Lệch ⇒ quét lại cả khối ⇒ kiểm tra ⇒ lời giải mới từ trạng thái mới.
         flow.startRescan()
         XCTAssertEqual(flow.path.last, .scan)
@@ -94,7 +91,6 @@ final class GuideCheckFlowTests: XCTestCase {
         flow.didReview(start, palette: .manualDefault)
         let base = CubePalette.manualDefault.baseColor
         flow.begin(GuideSession(mode: .teach, stages: SolverBeginner.solve(start, base: base), base: base))
-        flow.startCheck()
         flow.startRescan()
         let swap: [UInt8: UInt8] = [0: 3, 3: 0, 1: 1, 2: 2, 4: 4, 5: 5]
         var colors: [CubeColor: CubeRGB] = [:]
@@ -103,5 +99,58 @@ final class GuideCheckFlowTests: XCTestCase {
         flow.didReview(fresh, palette: CubePalette(colors: colors))
         XCTAssertEqual(flow.session?.base, CubeColor(raw: 3), "trắng giờ là nhãn 3")
         XCTAssertEqual(flow.palette?.colorName(flow.session!.base), .white)
+    }
+
+    /// Ảnh camera thấy khi đưa mặt `face` của `f` vào camera theo động tác kiểm tra.
+    private func image(_ f: CubeFacelets, _ face: CubeFace) -> [CubeRGB] {
+        ScanOrientation.imageIndices(GuideCheckFlow.orientation(face))
+            .map { CubePalette.manualDefault.rgb(f.stickers[$0]) }
+    }
+
+    private func afterCross() -> CubeFacelets {
+        let start = scrambled(2)
+        return SolverBeginner.solve(start, base: start.center(.u))[0].end
+    }
+
+    func testPressDungMatKhop() {
+        let f = afterCross()
+        XCTAssertEqual(GuideCheckFlow.press(image: image(f, .d), palette: .manualDefault, white: nil,
+                                            spec: GuideCheck.spec(.cross), expected: f), .match)
+    }
+
+    func testPressSaiMat() {
+        let f = afterCross()
+        XCTAssertEqual(GuideCheckFlow.press(image: image(f, .f), palette: .manualDefault, white: nil,
+                                            spec: GuideCheck.spec(.cross), expected: f), .wrongSide)
+    }
+
+    func testPressLechTraOLech() {
+        let f = afterCross()
+        var img = image(f, .d)
+        let k = ScanOrientation.imageIndices(GuideCheckFlow.orientation(.d)).firstIndex(of: 27 + 1)!
+        img[k] = CubePalette.manualDefault.rgb(CubeColor(raw: (f.stickers[28].raw + 1) % 6))
+        guard case .mismatch(let ix) = GuideCheckFlow.press(image: img, palette: .manualDefault, white: nil,
+                                                            spec: GuideCheck.spec(.corners), expected: f) else {
+            return XCTFail("phải lệch")
+        }
+        XCTAssertTrue(ix.contains(28), "\(ix)")
+    }
+
+    func testPaintGiuTrangThaiVaMauSong() {
+        let f = afterCross()
+        let live = Array(repeating: CubeRGB(r: 0.3, g: 0.6, b: 0.9), count: 9)
+        let p = GuideCheckFlow.paint(state: f, palette: .manualDefault, face: .d, live: live)
+        XCTAssertEqual(p.colors[0], CubePalette.manualDefault.rgb(f.stickers[0]))
+        XCTAssertEqual(p.colors[31], live[4])
+        XCTAssertEqual(GuideCheckFlow.paint(state: f, palette: .manualDefault, face: .d, live: []).colors[31],
+                       CubePalette.manualDefault.rgb(f.stickers[31]))
+    }
+
+    func testCheckTurn() {
+        for face: CubeFace in [.u, .d, .f] {
+            XCTAssertEqual(ScanOrientation.frontFace(GuideCheckFlow.orientation(face)), face)
+        }
+        XCTAssertEqual(GuideCheckFlow.checkTurn(.d), .tiltAwayFromYou)
+        XCTAssertEqual(GuideCheckFlow.checkTurn(.f), ScanTurn.none)
     }
 }
