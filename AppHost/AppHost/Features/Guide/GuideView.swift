@@ -17,6 +17,8 @@ struct GuideView: View {
     /// Tự chạy liên tiếp từng bước.
     @State private var autoplay = false
     @State private var autoplayTick = 0
+    /// Tăng khi Pause ⇒ khối dừng quay ngay.
+    @State private var stopToken = 0
 
     private var top: CubeColor { SolverPieces.opposite(of: session.base, in: session.state) }
 
@@ -56,6 +58,8 @@ struct GuideView: View {
                         .padding(.vertical, 8)
                         .frame(minHeight: geo.size.height)
                     }
+                    // Vừa màn ⇒ không cuộn, để kéo dọc trên khối là xoay khối (không giành với ScrollView).
+                    .scrollBounceBehavior(.basedOnSize)
                 }
             }
         }
@@ -120,7 +124,7 @@ struct GuideView: View {
 
     private var cube: some View {
         Cube3DView(state: session.state, palette: palette, animation: session.animation, speed: prefs.speed,
-                   highlight: session.currentStep?.move,
+                   highlight: session.currentStep?.move, stopToken: stopToken,
                    onAnimationEnd: { if autoplay { autoplayTick += 1 } })
             .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -177,6 +181,7 @@ struct GuideView: View {
     private func toggleAutoplay() {
         if autoplay {
             autoplay = false
+            stopToken += 1
         } else {
             autoplay = true
             if !GuideAutoplay.tick(session) { autoplay = false }

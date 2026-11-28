@@ -101,6 +101,41 @@ final class Cube3DPoseTests: XCTestCase {
         XCTAssertEqual(c.displayedStickerRGB(19), red)
     }
 
+    // Khung cao hơn rộng (màn giải trên iPhone) ⇒ camera lùi xa để khối không tràn hai bên.
+    func testCameraLuiXaKhiKhungCao() {
+        XCTAssertEqual(Cube3DController.cameraDistance(for: CGSize(width: 300, height: 300)), 8.2, accuracy: 1e-4)
+        XCTAssertEqual(Cube3DController.cameraDistance(for: CGSize(width: 300, height: 600)), 16.4, accuracy: 1e-4)
+        XCTAssertEqual(Cube3DController.cameraDistance(for: CGSize(width: 600, height: 300)), 8.2, accuracy: 1e-4)
+        XCTAssertEqual(Cube3DController.cameraDistance(for: .zero), 8.2, accuracy: 1e-4)
+    }
+
+    // Bấm Pause giữa lúc đang quay ⇒ khối dừng ngay ở trạng thái đích, không gọi onEnd.
+    func testDungNgayKhiPause() {
+        let c = controller(paint: nil)
+        let m = CubeMove(.face(.d), 2)
+        let target = CubeFacelets.solved(n: 3).applying(m)
+        var ended = 0
+        c.update(state: target, palette: .manualDefault, animation: Cube3DAnimation(move: m, reverse: false, token: 1),
+                 speed: .slow, highlight: nil, onEnd: { ended += 1 })
+        XCTAssertNotEqual(c.displayedFacelets, target)
+        c.finish(token: 1, state: target, palette: .manualDefault, highlight: nil)
+        XCTAssertEqual(c.displayedFacelets, target)
+        XCTAssertFalse(c.isAnimating)
+        XCTAssertEqual(ended, 0)
+    }
+
+    // Kéo lại khi khối đang trôi về chỗ ⇒ bắt đầu từ hướng đang thấy, không giật về góc chuẩn.
+    func testKeoLaiKhongGiat() {
+        let c = controller(paint: nil)
+        c.setDrag(CGSize(width: 120, height: 60))
+        let dragged = c.currentOrientation
+        c.setDrag(.zero)
+        c.resetView(duration: 0.4)
+        c.setDrag(CGSize(width: 1, height: 0))
+        let d = abs(simd_dot(dragged.vector, c.currentOrientation.vector))
+        XCTAssertGreaterThan(d, 0.999)
+    }
+
     // Đang kéo tay ⇒ không diễn lại động tác (khối không nhảy dưới tay).
     func testKhongDienLaiKhiDangKeo() {
         let s = ScanProtocol.cube3

@@ -31,11 +31,13 @@ struct Cube3DView: View {
     /// Ô đánh dấu đỏ liên tục (ô lệch khi kiểm tra).
     let marked: Set<Int>
     let accessibilityText: String?
+    /// Đổi ⇒ hoạt ảnh đang chạy dừng NGAY ở `state` (Pause của tự chạy).
+    let stopToken: Int
     let onAnimationEnd: () -> Void
 
     init(state: CubeFacelets, palette: CubePalette, animation: Cube3DAnimation?, speed: PrefsSpeed,
          highlight: CubeMove?, pose: Cube3DPose? = nil, paint: Cube3DPaint? = nil, glow: CubeFace? = nil,
-         effect: Cube3DEffect? = nil, marked: Set<Int> = [], accessibilityText: String? = nil,
+         effect: Cube3DEffect? = nil, marked: Set<Int> = [], accessibilityText: String? = nil, stopToken: Int = 0,
          onAnimationEnd: @escaping () -> Void = {}) {
         self.state = state
         self.palette = palette
@@ -48,11 +50,11 @@ struct Cube3DView: View {
         self.effect = effect
         self.marked = marked
         self.accessibilityText = accessibilityText
+        self.stopToken = stopToken
         self.onAnimationEnd = onAnimationEnd
     }
 
     @State private var controller = Cube3DController()
-    @State private var drag: CGSize = .zero
 
     var body: some View {
         RealityView { content in
@@ -61,16 +63,18 @@ struct Cube3DView: View {
             sync(animated: false)
         } update: { _ in
             sync(animated: true)
-            controller.setDrag(drag)
         }
+        // Kéo đi thẳng vào controller (không qua @State) ⇒ không dựng lại body/RealityView mỗi khung hình khi kéo.
         .gesture(
             DragGesture()
-                .onChanged { drag = $0.translation }
+                .onChanged { controller.setDrag($0.translation) }
                 .onEnded { _ in
-                    drag = .zero
+                    controller.setDrag(.zero)
                     controller.resetView(duration: 0.4)
                 }
         )
+        // Camera lùi theo tỉ lệ khung: khung cao hơn rộng không làm khối tràn hai bên.
+        .onGeometryChange(for: CGSize.self) { $0.size } action: { controller.fit($0) }
         .accessibilityElement()
         .accessibilityLabel(accessibilityText.map { Text($0) } ?? Text("3D cube"))
     }
@@ -78,6 +82,7 @@ struct Cube3DView: View {
     private func sync(animated: Bool) {
         controller.update(state: state, palette: palette, animation: animation, speed: speed,
                           highlight: highlight, paint: paint, glow: glow, marked: marked, onEnd: onAnimationEnd)
+        controller.finish(token: stopToken, state: state, palette: palette, highlight: highlight)
         controller.setPose(pose, animated: animated)
         controller.play(effect)
     }
@@ -96,6 +101,10 @@ final class Cube3DController {
     private var marked: Set<Int> = []
     private var shownMarked: Set<Int>?
     private var dragging = false
+    /// Hướng khối lúc bắt đầu kéo — kéo xoay quanh hướng đang thấy (kể cả khi khối đang trôi về chỗ).
+    private var dragBase: simd_quatf?
+    private let camera = PerspectiveCamera()
+    private var lastStopToken: Int?
     /// Số lần diễn lại động tác (test).
     private(set) var replaysPlayed = 0
     private var shownRGB: [Int: CubeRGB] = [:]
@@ -152,9 +161,8 @@ final class Cube3DController {
     func install(in content: RealityViewCameraContent) {
         if !installed {
             installed = true
-            let camera = PerspectiveCamera()
             camera.camera.fieldOfViewInDegrees = 38
-            camera.position = SIMD3(0, 0, 8.2)
+            camera.position = SIMD3(0, 0, Self.cameraDistance(for: .zero))
             world.addChild(camera)
             world.addChild(shakeRoot)
             shakeRoot.addChild(cubeRoot)
@@ -193,14 +201,46 @@ final class Cube3DController {
         }
     }
 
+    /// Khoảng lùi camera để khối (bán kính ~2,8 kể cả mũi tên) vừa khung. FOV 38° tính theo chiều cao ⇒ khung hẹp
+    /// hơn cao thì lùi thêm theo tỉ lệ h/w.
+    static func cameraDistance(for size: CGSize) -> Float {
+        guard size.width > 0, size.height > 0 else { return 8.2 }
+        return 8.2 * Float(max(1, size.height / size.width))
+    }
+
+    func fit(_ size: CGSize) {
+        camera.position = SIMD3(0, 0, Self.cameraDistance(for: size))
+    }
+
+    var isAnimating: Bool { animating }
+    /// Hướng khối đang hiện (test).
+    var currentOrientation: simd_quatf { cubeRoot.orientation }
+
+    /// `token` mới khi đang quay ⇒ bỏ phần còn lại, hiện ngay `state` (không gọi onEnd).
+    func finish(token: Int, state: CubeFacelets, palette: CubePalette, highlight: CubeMove?) {
+        guard token != lastStopToken else { return }
+        let first = lastStopToken == nil
+        lastStopToken = token
+        guard !first || token != 0, animating else { return }
+        cancelAnimation()
+        show(Cube3DScene(state), palette: palette, highlight: highlight)
+    }
+
     func setDrag(_ t: CGSize) {
         dragging = t != .zero
-        guard dragging else { return }
+        guard dragging else {
+            dragBase = nil
+            return
+        }
         poseTask?.cancel()
-        let yaw = viewYaw + Float(t.width) / 150
-        let pitch = max(-80 * .pi / 180, min(80 * .pi / 180, Self.pitch + Float(t.height) / 150))
-        cubeRoot.orientation = simd_quatf(angle: pitch, axis: SIMD3(1, 0, 0))
-            * simd_quatf(angle: yaw, axis: SIMD3(0, 1, 0)) * poseOrientation
+        if dragBase == nil {
+            // Dừng mọi lượt trôi đang chạy rồi lấy hướng đang thấy làm gốc.
+            cubeRoot.stopAllAnimations()
+            dragBase = cubeRoot.orientation
+        }
+        let q = simd_quatf(angle: Float(t.height) / 150, axis: SIMD3(1, 0, 0))
+            * simd_quatf(angle: Float(t.width) / 150, axis: SIMD3(0, 1, 0))
+        cubeRoot.orientation = q * (dragBase ?? targetOrientation)
     }
 
     func resetView(duration: TimeInterval) {
