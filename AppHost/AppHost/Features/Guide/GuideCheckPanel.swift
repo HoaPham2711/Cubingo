@@ -17,7 +17,8 @@ struct GuideCheckPanel: View {
     @State private var tip: ScanLightTip?
     @State private var token = 0
     @State private var effect: Cube3DEffect?
-    @State private var mismatch = false
+    /// Lệch: ô lệch (đỏ liên tục trên khối) + ảnh đã chụp (giữ trên khối thay cho màu sống).
+    @State private var mismatch: (marked: Set<Int>, image: [CubeRGB])?
 
     private var spec: GuideCheckSpec { GuideCheck.spec(kind) }
     private var onRequestedSide: Bool {
@@ -26,8 +27,8 @@ struct GuideCheckPanel: View {
     }
 
     var body: some View {
-        ScanSplitLayout(camera: { cameraPanel }, cube: { cubePanel })
-            .overlay { if mismatch { mismatchOverlay } }
+        ScanSplitLayout(camera: { cameraPanel.overlay { if mismatch != nil { mismatchOverlay } } },
+                        cube: { cubePanel })
             .onAppear {
                 camera.start()
                 camera.expect(spec.face)
@@ -42,7 +43,7 @@ struct GuideCheckPanel: View {
             .task {
                 while !Task.isCancelled {
                     try? await Task.sleep(nanoseconds: ScanView.replaySeconds)
-                    if !onRequestedSide { token += 1 }
+                    if !onRequestedSide, mismatch == nil { token += 1 }
                 }
             }
             .trackScreen("guide_check")
@@ -65,12 +66,13 @@ struct GuideCheckPanel: View {
                                         replayFrom: turn == .none ? nil : ScanOrientation.rotation(.none),
                                         token: token),
                        paint: GuideCheckFlow.paint(state: session.state, palette: palette, face: spec.face,
-                                                   live: onRequestedSide ? live : []),
-                       glow: spec.face, effect: effect)
+                                                   live: mismatch?.image ?? (onRequestedSide ? live : [])),
+                       glow: spec.face, effect: effect, marked: mismatch?.marked ?? [],
+                       accessibilityText: ScanText.turn(turn))
                 .aspectRatio(1, contentMode: .fit)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .accessibilityLabel(Text(ScanText.turn(turn)))
-            ScanShutterButton(ready: live.count == 9, action: press)
+            ScanShutterButton(ready: live.count == 9 && mismatch == nil, action: press)
+                .disabled(mismatch != nil)
         }
     }
 
@@ -84,8 +86,7 @@ struct GuideCheckPanel: View {
             onMatched()
         case .mismatch(let ix):
             deps.haptic(.warning)
-            effect = Cube3DEffect(kind: .flash(ix), token: (effect?.token ?? 0) + 1)
-            mismatch = true
+            mismatch = (Set(ix), live)
         }
     }
 

@@ -28,11 +28,15 @@ struct Cube3DView: View {
     /// Mặt có viền phát sáng (khung khối).
     let glow: CubeFace?
     let effect: Cube3DEffect?
+    /// Ô đánh dấu đỏ liên tục (ô lệch khi kiểm tra).
+    let marked: Set<Int>
+    let accessibilityText: String?
     let onAnimationEnd: () -> Void
 
     init(state: CubeFacelets, palette: CubePalette, animation: Cube3DAnimation?, speed: PrefsSpeed,
          highlight: CubeMove?, pose: Cube3DPose? = nil, paint: Cube3DPaint? = nil, glow: CubeFace? = nil,
-         effect: Cube3DEffect? = nil, onAnimationEnd: @escaping () -> Void = {}) {
+         effect: Cube3DEffect? = nil, marked: Set<Int> = [], accessibilityText: String? = nil,
+         onAnimationEnd: @escaping () -> Void = {}) {
         self.state = state
         self.palette = palette
         self.animation = animation
@@ -42,6 +46,8 @@ struct Cube3DView: View {
         self.paint = paint
         self.glow = glow
         self.effect = effect
+        self.marked = marked
+        self.accessibilityText = accessibilityText
         self.onAnimationEnd = onAnimationEnd
     }
 
@@ -66,12 +72,12 @@ struct Cube3DView: View {
                 }
         )
         .accessibilityElement()
-        .accessibilityLabel(Text("3D cube"))
+        .accessibilityLabel(accessibilityText.map { Text($0) } ?? Text("3D cube"))
     }
 
     private func sync(animated: Bool) {
         controller.update(state: state, palette: palette, animation: animation, speed: speed,
-                          highlight: highlight, paint: paint, glow: glow, onEnd: onAnimationEnd)
+                          highlight: highlight, paint: paint, glow: glow, marked: marked, onEnd: onAnimationEnd)
         controller.setPose(pose, animated: animated)
         controller.play(effect)
     }
@@ -87,6 +93,11 @@ final class Cube3DController {
     private var shownPaint: Cube3DPaint??
     private var paint: Cube3DPaint?
     private var flashing: Set<Int> = []
+    private var marked: Set<Int> = []
+    private var shownMarked: Set<Int>?
+    private var dragging = false
+    /// Số lần diễn lại động tác (test).
+    private(set) var replaysPlayed = 0
     private var shownRGB: [Int: CubeRGB] = [:]
     private var poseOrientation = simd_quatf(angle: 0, axis: SIMD3(0, 1, 0))
     private var poseToken: Int?
@@ -153,9 +164,11 @@ final class Cube3DController {
     }
 
     func update(state: CubeFacelets, palette: CubePalette, animation: Cube3DAnimation?, speed: PrefsSpeed,
-                highlight: CubeMove?, paint: Cube3DPaint? = nil, glow: CubeFace? = nil, onEnd: @escaping () -> Void) {
+                highlight: CubeMove?, paint: Cube3DPaint? = nil, glow: CubeFace? = nil, marked: Set<Int> = [],
+                onEnd: @escaping () -> Void) {
         if cubieEntities.isEmpty || scene?.n != state.n { build(n: state.n) }
         self.paint = paint
+        self.marked = marked
         setGlow(glow)
         if let animation, animation.token != lastToken {
             lastToken = animation.token
@@ -174,13 +187,15 @@ final class Cube3DController {
         }
         guard !animating else { return }
         if scene?.facelets() != state || shownPalette != palette || shownHighlight != .some(highlight)
-            || shownPaint != .some(paint) {
+            || shownPaint != .some(paint) || shownMarked != marked {
             show(Cube3DScene(state), palette: palette, highlight: highlight)
         }
     }
 
     func setDrag(_ t: CGSize) {
-        guard t != .zero else { return }
+        dragging = t != .zero
+        guard dragging else { return }
+        poseTask?.cancel()
         let yaw = viewYaw + Float(t.width) / 150
         let pitch = max(-80 * .pi / 180, min(80 * .pi / 180, Self.pitch + Float(t.height) / 150))
         cubeRoot.orientation = simd_quatf(angle: pitch, axis: SIMD3(1, 0, 0))
@@ -198,7 +213,8 @@ final class Cube3DController {
     /// Đổi hướng ⇒ quay mượt; `token` mới + `replayFrom` ⇒ về tức thì `replayFrom` rồi diễn lại động tác.
     func setPose(_ p: Cube3DPose?, animated: Bool) {
         let p = p ?? Cube3DPose(orientation: simd_quatf(angle: 0, axis: SIMD3(0, 1, 0)), token: poseToken ?? 0)
-        let replay = p.token != poseToken && poseToken != nil && p.replayFrom != nil
+        // Đang kéo tay ⇒ bỏ lượt diễn lại (không giật khối khỏi tay người dùng).
+        let replay = p.token != poseToken && poseToken != nil && p.replayFrom != nil && !dragging
         let yaw = p.viewFromLeft ? -Self.yaw : Self.yaw
         let yawChanged = yaw != viewYaw
         viewYaw = yaw
@@ -216,6 +232,7 @@ final class Cube3DController {
         }
         var start = previous
         if replay, let from = p.replayFrom {
+            replaysPlayed += 1
             start = from
             cubeRoot.orientation = rest * from
         }
@@ -355,6 +372,7 @@ final class Cube3DController {
         shownPalette = palette
         shownHighlight = .some(highlight)
         shownPaint = .some(paint)
+        shownMarked = marked
         let lit = Set(highlight.map { s.members($0) } ?? [])
         for (i, c) in s.cubies.enumerated() {
             guard let e = cubieEntities[c.id] else { continue }
@@ -363,7 +381,7 @@ final class Cube3DController {
             for (normal, color) in c.stickers {
                 let idx = s.faceletIndex(cubie: i, local: normal)
                 var rgb = paint.map { $0.colors[idx] ?? Self.blankRGB } ?? palette.rgb(color)
-                if flashing.contains(idx) { rgb = Self.flashRGB }
+                if flashing.contains(idx) || marked.contains(idx) { rgb = Self.flashRGB }
                 shownRGB[idx] = rgb
                 // Sáng nhẹ: đủ thấy lớp sắp quay mà không làm màu đổi tên (đỏ thành hồng…).
                 let k: CGFloat = lit.contains(i) ? 0.12 : 0

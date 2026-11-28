@@ -25,6 +25,11 @@ final class ScanCaptureModel: ObservableObject {
     @Published private(set) var result: ScanResult?
     /// Ảnh đã chụp theo thứ tự bước.
     private var images: [[CubeRGB]] = []
+    /// Số khung LIÊN TIẾP có tâm khác mặt vừa chụp (một khung nhiễu không tính là đã xoay).
+    private var turnedFrames = 0
+
+    /// Số khung liên tiếp cần để coi là người dùng đã xoay (≈ 0,2 s ở 15 Hz).
+    static let turnFrames = 3
 
     /// Hệ số trung bình trượt mỗi khung (mẫu ≤ 15 Hz ⇒ thời hằng khoảng 0,2 s).
     static let smoothing = 0.35
@@ -37,12 +42,13 @@ final class ScanCaptureModel: ObservableObject {
     func observe(_ s: [CubeRGB]) {
         guard s.count == 9 else { return }
         if awaitingTurn {
+            live = s
             guard let last = images.last, CubeColorMath.deltaE(s[4], last[4]) >= Self.sameCenterDeltaE else {
-                live = s
+                turnedFrames = 0
                 return
             }
-            awaitingTurn = false
-            live = s
+            turnedFrames += 1
+            if turnedFrames >= Self.turnFrames { awaitingTurn = false }
             return
         }
         guard live.count == 9 else {
@@ -70,6 +76,7 @@ final class ScanCaptureModel: ObservableObject {
         images.append(live)
         stepIndex = images.count
         awaitingTurn = true
+        turnedFrames = 0
         return images.count == steps.count ? finish() : .accepted
     }
 
@@ -106,6 +113,11 @@ final class ScanCaptureModel: ObservableObject {
             for (k, idx) in step.image.enumerated() { c[idx] = live[k] }
         }
         return Cube3DPaint(colors: c)
+    }
+
+    /// Hướng khối lúc chụp mặt `face` (quay khối cho thấy một mặt đã quét).
+    func orientation(of face: CubeFace) -> simd_quatf {
+        (steps.first { $0.face == face } ?? steps[0]).orientation
     }
 
     var glowFace: CubeFace? { stepIndex < steps.count ? step.face : nil }

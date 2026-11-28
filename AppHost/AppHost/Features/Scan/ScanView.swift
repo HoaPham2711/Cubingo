@@ -33,6 +33,8 @@ struct ScanView: View {
     @State private var arrowToken = 0
     @State private var poseToken = 0
     @State private var effect: Cube3DEffect?
+    /// Mặt đã quét đang được quay ra cho người dùng thấy (bấm ✓ trùng mặt đó).
+    @State private var peek: CubeFace?
 
     static let replaySeconds: UInt64 = 2_500_000_000
 
@@ -89,6 +91,9 @@ struct ScanView: View {
     // MARK: - Khối
 
     private var pose: Cube3DPose {
+        if let peek {
+            return Cube3DPose(orientation: model.orientation(of: peek), token: poseToken, viewFromLeft: true)
+        }
         let i = model.stepIndex
         let from = model.awaitingTurn && i > 0 && i < model.steps.count ? model.steps[i - 1].orientation : nil
         return Cube3DPose(orientation: model.pose, replayFrom: from, token: poseToken, viewFromLeft: true,
@@ -98,11 +103,11 @@ struct ScanView: View {
     private var cubePanel: some View {
         VStack(spacing: 8) {
             Cube3DView(state: .solved(n: 3), palette: .manualDefault, animation: nil, speed: deps.prefs.speed,
-                       highlight: nil, pose: pose, paint: model.paint, glow: model.glowFace, effect: effect)
+                       highlight: nil, pose: pose, paint: model.paint, glow: peek ?? model.glowFace, effect: effect,
+                       accessibilityText: ScanText.accessibility(step: model.step, captured: model.capturedCount,
+                                                                 awaitingTurn: model.awaitingTurn))
                 .aspectRatio(1, contentMode: .fit)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .accessibilityLabel(Text(ScanText.accessibility(step: model.step, captured: model.capturedCount,
-                                                                awaitingTurn: model.awaitingTurn)))
             ZStack {
                 ScanShutterButton(ready: model.live.count == 9 || model.capturedCount == model.steps.count,
                                   action: press)
@@ -123,10 +128,14 @@ struct ScanView: View {
         case .duplicate(let face):
             deps.haptic(.warning)
             let ix = model.steps.first { $0.face == face }?.image ?? []
+            // Mặt trùng có thể đang ở phía khuất ⇒ quay khối cho thấy nó, nháy đỏ, rồi quay về.
             effect = Cube3DEffect(kind: .shake, token: (effect?.token ?? 0) + 1)
+            peek = face
             Task { @MainActor in
-                try? await Task.sleep(nanoseconds: 350_000_000)
+                try? await Task.sleep(nanoseconds: UInt64(Cube3DPose.turnSeconds * 1_000_000_000))
                 effect = Cube3DEffect(kind: .flash(ix), token: (effect?.token ?? 0) + 1)
+                try? await Task.sleep(nanoseconds: 800_000_000)
+                if peek == face { peek = nil }
             }
         case .finished(let r):
             deps.haptic(.success)
@@ -138,7 +147,7 @@ struct ScanView: View {
 
     private func applyPreviewPreset() {
         #if targetEnvironment(simulator)
-        ScanPreviewSeed.apply(to: model)
+        ScanPreviewSeed.apply(to: model, camera: camera)
         #endif
     }
 }

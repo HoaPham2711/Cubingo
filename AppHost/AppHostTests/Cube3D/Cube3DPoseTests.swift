@@ -89,4 +89,27 @@ final class Cube3DPoseTests: XCTestCase {
         try await Task.sleep(nanoseconds: 50_000_000)
         XCTAssertEqual(c.displayedStickerRGB(19), Cube3DController.flashRGB, "lắc không huỷ nháy")
     }
+
+    // Ô đánh dấu (lệch khi kiểm tra) đỏ liên tục tới khi bỏ đánh dấu.
+    func testODanhDauDoLienTuc() {
+        let c = controller(paint: Cube3DPaint(colors: [18: red, 19: red]))
+        c.update(state: .solved(n: 3), palette: .manualDefault, animation: nil, speed: .medium, highlight: nil,
+                 paint: Cube3DPaint(colors: [18: red, 19: red]), glow: .f, marked: [19], onEnd: {})
+        XCTAssertEqual(c.displayedStickerRGB(19), Cube3DController.flashRGB)
+        c.update(state: .solved(n: 3), palette: .manualDefault, animation: nil, speed: .medium, highlight: nil,
+                 paint: Cube3DPaint(colors: [18: red, 19: red]), glow: .f, marked: [], onEnd: {})
+        XCTAssertEqual(c.displayedStickerRGB(19), red)
+    }
+
+    // Đang kéo tay ⇒ không diễn lại động tác (khối không nhảy dưới tay).
+    func testKhongDienLaiKhiDangKeo() {
+        let s = ScanProtocol.cube3
+        let c = controller(paint: nil, pose: Cube3DPose(orientation: s[1].orientation, token: 0))
+        c.setDrag(CGSize(width: 40, height: 0))
+        c.setPose(Cube3DPose(orientation: s[1].orientation, replayFrom: s[0].orientation, token: 1), animated: true)
+        XCTAssertEqual(c.replaysPlayed, 0)
+        c.setDrag(.zero)
+        c.setPose(Cube3DPose(orientation: s[1].orientation, replayFrom: s[0].orientation, token: 2), animated: true)
+        XCTAssertEqual(c.replaysPlayed, 1)
+    }
 }

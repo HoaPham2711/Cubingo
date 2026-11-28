@@ -55,11 +55,16 @@ final class ScanCamera: ObservableObject {
     /// Quét kiểm tra một mặt (lưới theo thứ tự đọc của mặt).
     func expect(_ face: CubeFace) {
         #if targetEnvironment(simulator)
-        expectFrame(ScanPreviewSeed.grid(face))
+        expectFrame(ScanPreviewSeed.checkImage(face))
         #endif
     }
 
     #if targetEnvironment(simulator)
+    /// Có giá trị ⇒ nguồn giả của CAMERA NÀY luôn phát đúng khung này (giữ trạng thái để chụp ảnh UI).
+    private var frozenFrame: [CubeRGB]?
+
+    func freezeSeed(_ frame: [CubeRGB]) { frozenFrame = frame }
+
     private func expectFrame(_ next: [CubeRGB]) {
         Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: 800_000_000)
@@ -98,7 +103,7 @@ final class ScanCamera: ObservableObject {
         seedTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 guard let self else { return }
-                self.samples = ScanPreviewSeed.frozenFrame ?? self.seedFrame
+                self.samples = self.frozenFrame ?? self.seedFrame
                 try? await Task.sleep(nanoseconds: 100_000_000)
             }
         }

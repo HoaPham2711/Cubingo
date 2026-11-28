@@ -49,7 +49,7 @@ final class ScanCaptureModelTests: XCTestCase {
         show(m, images[0])
         XCTAssertTrue(m.awaitingTurn)
         XCTAssertNil(m.paint.colors[9])
-        m.observe(images[1])
+        for _ in 0..<ScanCaptureModel.turnFrames { m.observe(images[1]) }
         XCTAssertFalse(m.awaitingTurn)
         XCTAssertNotNil(m.paint.colors[9])
         XCTAssertEqual(m.paint.colors[18], images[0][0])
@@ -112,5 +112,26 @@ final class ScanCaptureModelTests: XCTestCase {
         let turns: [ScanTurn] = [.none, .left, .tiltTowardYou, .flipTowardYou, .tiltAwayFromYou]
         XCTAssertEqual(Set(turns.map(ScanText.turn)).count, turns.count)
         XCTAssertTrue(ScanText.accessibility(step: st[5], captured: 6, awaitingTurn: true).contains("All 6"))
+    }
+
+    // Một khung nhiễu (tay lướt qua, nhoè) không được kết thúc việc chờ xoay; cần vài khung liên tiếp.
+    func testMotKhungNhieuKhongKetThucChoXoay() {
+        let m = ScanCaptureModel()
+        show(m, images[0])
+        m.capture()
+        m.observe(images[1])
+        XCTAssertTrue(m.awaitingTurn, "1 khung chưa đủ")
+        m.observe(images[0])
+        m.observe(images[1])
+        m.observe(images[1])
+        XCTAssertTrue(m.awaitingTurn, "chuỗi bị ngắt ⇒ đếm lại")
+        m.observe(images[1])
+        XCTAssertFalse(m.awaitingTurn)
+    }
+
+    func testHuongCuaMatDaQuet() {
+        let m = ScanCaptureModel()
+        XCTAssertEqual(m.orientation(of: .u), ScanProtocol.cube3[4].orientation)
+        XCTAssertEqual(m.orientation(of: .f), ScanProtocol.cube3[0].orientation)
     }
 }

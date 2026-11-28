@@ -35,19 +35,23 @@ enum ScanPreviewSeed {
 
     /// Đặt bởi `AppPreview` (route `scan` / `scanTurn`).
     static var preset: Preset?
-    /// Có giá trị ⇒ nguồn giả luôn phát đúng khung này (giữ nguyên trạng thái để chụp).
-    static var frozenFrame: [CubeRGB]?
+
+    /// Ảnh camera khi quét kiểm tra mặt `face` trong màn giải (cùng phép chiếu với `GuideCheckFlow`).
+    static func checkImage(_ face: CubeFace) -> [CubeRGB] {
+        let s = samples54
+        return ScanOrientation.imageIndices(GuideCheckFlow.orientation(face)).map { s[$0] }
+    }
 
     /// Đã chụp 2 mặt, đang nhận màu mặt 3 (`midScan`) / đã chụp 3 mặt, đang chờ xoay (`turning`).
     @MainActor
-    static func apply(to m: ScanCaptureModel) {
+    static func apply(to m: ScanCaptureModel, camera: ScanCamera) {
         guard let preset, m.capturedCount == 0 else { return }
         let k = preset == .midScan ? 2 : 3
         for st in ScanProtocol.cube3.prefix(k) {
             for _ in 0..<3 { m.observe(image(st)) }
             m.capture()
         }
-        frozenFrame = image(ScanProtocol.cube3[2])
+        camera.freezeSeed(image(ScanProtocol.cube3[2]))
         m.observe(image(ScanProtocol.cube3[2]))
     }
 

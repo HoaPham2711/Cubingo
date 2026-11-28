@@ -70,12 +70,13 @@ final class FlowModelTests: XCTestCase {
         XCTAssertEqual(flow.path, [.scan])
         assertOneRealityView(flow)
         flow.scanBack()
-        XCTAssertEqual(flow.path, [.guide(.teach)])
+        // Màn chọn cách giải nằm dưới màn giải (không có RealityView) ⇒ quay lại từ màn giải vẫn về đó.
+        XCTAssertEqual(flow.path, [.mode, .guide(.teach)])
         XCTAssertFalse(flow.isRechecking)
         XCTAssertTrue(flow.session === session)
         flow.startRescan()
         flow.didScan(ScanPreviewSeed.scanResult)
-        XCTAssertEqual(flow.path, [.guide(.teach)])
+        XCTAssertEqual(flow.path, [.mode, .guide(.teach)])
         XCTAssertFalse(flow.isRechecking)
         assertOneRealityView(flow)
     }
@@ -118,6 +119,6 @@ final class FlowModelTests: XCTestCase {
         f2.startRescan()
         f2.didScan(ScanPreviewSeed.scanResult)
         f2.didScan(ScanPreviewSeed.scanResult)
-        XCTAssertEqual(f2.path, [.guide(.teach)])
+        XCTAssertEqual(f2.path, [.mode, .guide(.teach)])
     }
 }

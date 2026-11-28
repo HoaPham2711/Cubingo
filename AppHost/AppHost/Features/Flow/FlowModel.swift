@@ -44,7 +44,7 @@ final class FlowModel: ObservableObject {
     func scanBack() {
         if isRechecking, session != nil {
             isRechecking = false
-            path = [.guide(.teach)]
+            path = [.mode, .guide(.teach)]
         } else {
             isRechecking = false
             path = []
@@ -163,7 +163,8 @@ final class FlowModel: ObservableObject {
             session = GuideSession(mode: .teach, stages: stages, base: base)
         }
         isRechecking = false
-        path = [.guide(.teach)]
+        // Màn chọn cách giải không có RealityView ⇒ được nằm dưới màn giải (quay lại từ màn giải vẫn về đó).
+        path = [.mode, .guide(.teach)]
     }
 
     /// Phiên xong ⇒ màn ăn mừng.
