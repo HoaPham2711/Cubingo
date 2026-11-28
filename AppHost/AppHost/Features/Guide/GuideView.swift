@@ -44,14 +44,18 @@ struct GuideView: View {
                 }
                 .padding(24)
             } else {
-                ScrollView {
-                    VStack(spacing: 14) {
-                        header
-                        cube.frame(height: 320)
-                        panel
+                // Khối lấy hết chỗ trống còn lại (tối thiểu 320 pt); chữ to quá thì cuộn.
+                GeometryReader { geo in
+                    ScrollView {
+                        VStack(spacing: 14) {
+                            header
+                            cube.frame(minHeight: 320, maxHeight: .infinity)
+                            panel
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 8)
+                        .frame(minHeight: geo.size.height)
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 8)
                 }
             }
         }
@@ -118,7 +122,7 @@ struct GuideView: View {
         Cube3DView(state: session.state, palette: palette, animation: session.animation, speed: prefs.speed,
                    highlight: session.currentStep?.move,
                    onAnimationEnd: { if autoplay { autoplayTick += 1 } })
-            .frame(maxWidth: .infinity, maxHeight: 520)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     @ViewBuilder

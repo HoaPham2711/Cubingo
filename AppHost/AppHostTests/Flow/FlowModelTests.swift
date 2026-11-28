@@ -121,4 +121,18 @@ final class FlowModelTests: XCTestCase {
         f2.didScan(ScanPreviewSeed.scanResult)
         XCTAssertEqual(f2.path, [.mode, .guide(.teach)])
     }
+
+    // Quét hợp lệ ⇒ màn chọn cách giải tự mở màn giải MỘT lần (quay lại từ màn giải thì ở lại chọn cách khác).
+    func testQuetXongTuVaoManGiai() {
+        let flow = FlowModel()
+        flow.choose(.cube3)
+        flow.didScan(ScanPreviewSeed.scanResult)
+        XCTAssertTrue(flow.consumeAutoStart())
+        XCTAssertFalse(flow.consumeAutoStart(), "chỉ một lần")
+        // Khối đã giải sẵn ⇒ không tự mở.
+        let solved = FlowModel()
+        solved.choose(.cube3)
+        solved.didReview(.solved(n: 3), palette: .manualDefault)
+        XCTAssertFalse(solved.consumeAutoStart())
+    }
 }

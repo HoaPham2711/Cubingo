@@ -37,4 +37,12 @@ final class PrefsStoreTests: XCTestCase {
         // Dừng một nhịp có mũi tên trước khi quay.
         XCTAssertEqual(PrefsSpeed.medium.leadInSeconds, 0.45, accuracy: 1e-9)
     }
+
+    // Quét xong vào thẳng màn giải bằng cách giải dùng lần trước (mặc định Just solve it).
+    func testNhoCachGiaiLanTruoc() {
+        let store = PrefsStore(defaults: defaults)
+        XCTAssertEqual(store.lastMode, .quick)
+        store.lastMode = .teach
+        XCTAssertEqual(PrefsStore(defaults: defaults).lastMode, .teach)
+    }
 }

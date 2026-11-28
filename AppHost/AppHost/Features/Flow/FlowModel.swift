@@ -31,6 +31,8 @@ final class FlowModel: ObservableObject {
     @Published private(set) var isRechecking = false
     /// Đổi ⇒ màn quét dựng mới (quét lại từ đầu thay vì về đúng chỗ đang dở).
     @Published private(set) var scanGeneration = 0
+    /// Vừa quét xong một khối chưa giải ⇒ màn chọn cách giải tự mở màn giải (một lần).
+    private var autoStartPending = false
 
     /// Chỉ nhận khối đang có; đẩy màn quét.
     func choose(_ p: FlowPuzzle) {
@@ -85,7 +87,14 @@ final class FlowModel: ObservableObject {
         }
         cube = f
         self.palette = palette
+        autoStartPending = !f.isSolved
         path = [.mode]
+    }
+
+    /// `true` đúng một lần sau khi quét xong ⇒ màn chọn cách giải tự mở màn giải bằng cách giải lần trước.
+    func consumeAutoStart() -> Bool {
+        defer { autoStartPending = false }
+        return autoStartPending
     }
 
     /// Nút quay lại của màn chọn cách giải ⇒ quét lại từ đầu.
