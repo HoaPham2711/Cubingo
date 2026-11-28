@@ -99,6 +99,8 @@ final class GuideSession: ObservableObject {
             stepIndex = 0
             state = stages[k].start
             phase = .step
+            // Nước cuối của chặng trước không còn là việc của khối: khối dựng lại (sau quét kiểm tra) không phát lại nó.
+            animation = nil
         } else {
             phase = .finished
         }

@@ -49,6 +49,8 @@ struct ScanView: View {
             applyPreviewPreset()
             camera.start()
             camera.expect(model.step)
+            // Quay về từ màn đẩy lên trên (nhập tay, kiểm tra màu) ⇒ khoá lại cân bằng trắng nếu đã chụp mặt nào.
+            camera.lockWhiteBalance(model.capturedCount > 0)
         }
         .onDisappear { camera.stop() }
         .onReceive(camera.$samples) { s in

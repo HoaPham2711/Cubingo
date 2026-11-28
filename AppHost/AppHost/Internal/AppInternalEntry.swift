@@ -77,6 +77,8 @@ struct AppFlowDebugSection: View {
                 flow.startOver()
                 flow.choose(.cube3)
                 flow.didReview(cube, palette: .manualDefault)
+                // Lối thử: dừng ở màn chọn cách giải để chọn Teach me / Just solve it.
+                _ = flow.consumeAutoStart()
             } label: { dtext("Random scrambled cube") }
         } header: {
             dtext("Cubingo")

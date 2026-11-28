@@ -90,6 +90,8 @@ enum AppPreviewSeed {
         case .mode, .guide, .guideStageDone, .guideCheck, .done:
             flow.choose(.cube3)
             flow.didReview(ScanPreviewSeed.state, palette: .manualDefault)
+            // Route `mode` chụp màn chọn cách giải ⇒ không tự vào màn giải.
+            _ = flow.consumeAutoStart()
             switch AppPreview.current {
             case .guide: flow.begin(GuidePreviewSeed.midMiddleLayer())
             case .guideStageDone: flow.begin(GuidePreviewSeed.stageDone())

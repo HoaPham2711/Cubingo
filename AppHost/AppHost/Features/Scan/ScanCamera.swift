@@ -8,6 +8,9 @@ final class ScanCamera: ObservableObject {
     @Published private(set) var samples: [CubeRGB] = []
     @Published private(set) var torchOn = false
     private var device: AVCaptureDevice?
+    /// Hệ số cân bằng trắng của lần khoá đầu — khoá lại (quay về màn quét, Undo) dùng đúng hệ số này để mọi mặt cùng
+    /// một hệ màu. Chỉ quên khi mở khoá hẳn (quét lại từ đầu).
+    private var lockedGains: AVCaptureDevice.WhiteBalanceGains?
 
     /// Máy có đèn pin (Simulator: không).
     var hasTorch: Bool { device?.hasTorch ?? false }
@@ -42,10 +45,26 @@ final class ScanCamera: ObservableObject {
 
     /// Khoá cân bằng trắng sau mặt đầu: camera tự chỉnh trắng theo từng mặt làm cùng một màu lệch nhau giữa các mặt.
     func lockWhiteBalance(_ locked: Bool) {
+        if !locked { lockedGains = nil }
+        applyWhiteBalance(locked)
+    }
+
+    private func applyWhiteBalance(_ locked: Bool) {
         guard let device, (try? device.lockForConfiguration()) != nil else { return }
         defer { device.unlockForConfiguration() }
-        let mode: AVCaptureDevice.WhiteBalanceMode = locked ? .locked : .continuousAutoWhiteBalance
-        if device.isWhiteBalanceModeSupported(mode) { device.whiteBalanceMode = mode }
+        guard locked else {
+            if device.isWhiteBalanceModeSupported(.continuousAutoWhiteBalance) {
+                device.whiteBalanceMode = .continuousAutoWhiteBalance
+            }
+            return
+        }
+        guard device.isWhiteBalanceModeSupported(.locked) else { return }
+        if let g = lockedGains {
+            device.setWhiteBalanceModeLocked(with: g)
+        } else {
+            device.whiteBalanceMode = .locked
+            lockedGains = device.deviceWhiteBalanceGains
+        }
     }
 
     /// Bật / tắt đèn pin (phòng tối).
@@ -58,7 +77,8 @@ final class ScanCamera: ObservableObject {
 
     func stop() {
         setTorch(false)
-        lockWhiteBalance(false)
+        // Rời màn (đẩy màn khác lên) ⇒ trả camera về tự chỉnh nhưng NHỚ hệ số để khoá lại khi quay về.
+        applyWhiteBalance(false)
         #if targetEnvironment(simulator)
         seedTask?.cancel()
         seedTask = nil
