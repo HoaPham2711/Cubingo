@@ -21,11 +21,16 @@ Ghi kết quả ngay dưới từng mục (✅ / ❌ + một dòng ghi chú).
   |---|---|---|---|
   | | | | |
 
-- [ ] Tự chụp khi giữ yên khoảng 0,5 s; nút chụp tay cũng chạy; rung nhẹ khi chụp (Settings › Haptics bật).
-- [ ] Bước "Turn left once more": giơ mặt khác ⇒ "That's not the first side yet"; giơ lại mặt đầu ⇒ đi tiếp.
-- [ ] Giơ lại một mặt đã quét ⇒ "This side was already scanned — turn once more".
-- [ ] Cố ý nghiêng mặt trên 90° khi quét ⇒ màn kiểm tra tự sửa (không báo lỗi) nếu chỉ có một cách đúng.
-- [ ] Phòng tối ⇒ "Face a window or a lamp".
+- [ ] Màn quét mới (spec `2026-11-28-cubingo-scan-redesign-design.md`): camera ở trên, khối 3D ở dưới; mặt viền cam nhận
+      màu camera liên tục, màu đổi mượt (không giật) và giống khối thật.
+- [ ] Bấm ✓ ⇒ rung nhẹ, mặt khoá màu, mũi tên cong hiện trên camera và khối ảo diễn đúng động tác; làm theo được mà
+      không cần đọc chữ. Chưa xoay thì mũi tên + động tác nhắc lại khoảng 2,5 s một lần; xoay xong mũi tên tắt.
+- [ ] Thứ tự 6 lần bấm: xoay trái ×3, lật mặt trên về phía mình, lật thêm 180° ⇒ đi thẳng sang màn chọn cách giải
+      (khi không có lỗi) — khối ở màn chọn cách giải khớp khối thật.
+- [ ] Bấm ✓ khi vẫn đang hướng vào mặt vừa quét ⇒ khối lắc, mặt đó nháy đỏ, không nhận.
+- [ ] Hoàn tác ⇒ khối quay ngược về mặt trước, mặt đó nhận màu lại. Nút quay lại ở màn chọn cách giải ⇒ quét lại từ đầu.
+- [ ] Cố ý lật lệch một góc khi quét mặt trên ⇒ vẫn ra khối đúng (tự sửa) nếu chỉ có một cách đúng.
+- [ ] Phòng tối ⇒ biểu tượng bóng đèn nhấp nháy ở góc camera; chói ⇒ biểu tượng mặt trời.
 - [ ] Từ chối quyền camera (Settings iOS) ⇒ "Camera is off…" + "Open Settings" + "Enter colors manually"; nhập tay đủ
       54 ô chạy tới màn chọn cách giải.
 
@@ -34,8 +39,10 @@ Ghi kết quả ngay dưới từng mục (✅ / ❌ + một dòng ghi chú).
 - [ ] Just solve it: thời gian từ lúc bấm tới khi hiện bước đầu < 1 s. Lần đầu sau khi mở app có nạp bảng ~4 MB — ghi
       thời gian lần đầu: ____ s, lần sau: ____ s.
 - [ ] Giải xong khối THẬT bằng Just solve it.
-- [ ] Giải xong khối THẬT bằng Teach me; quét kiểm tra ít nhất 3 chặng ("Check my cube").
-- [ ] Cố ý làm sai một bước rồi quét kiểm tra ⇒ "Looks different…" ⇒ "Scan the whole cube" ⇒ lời giải mới bắt đầu từ
+- [ ] Giải xong khối THẬT bằng Teach me; quét kiểm tra ít nhất 3 chặng ("Check my cube" ⇒ camera hiện ngay trong màn
+      giải, khối quay mặt cần kiểm ra trước, mũi tên chỉ cách đưa mặt đó vào camera). Đưa sai mặt rồi bấm ✓ ⇒ khối lắc.
+- [ ] Cố ý làm sai một bước rồi quét kiểm tra ⇒ ô lệch nháy đỏ + "That side doesn't match" ⇒ "Scan whole cube" ⇒ lời
+      giải mới bắt đầu từ
       trạng thái mới, màu nền vẫn như cũ.
 - [ ] Back / Replay / Next qua ranh giới chặng và qua bước xoay cả khối: khối 3D luôn khớp khối trên tay; chip
       "Hold: … on top, … facing you" đúng sau mỗi bước xoay cả khối.
