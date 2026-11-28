@@ -7,17 +7,26 @@ struct GuideView: View {
     let palette: CubePalette
     @ObservedObject var prefs: PrefsStore
     let onFinish: () -> Void
-    /// `nil` ⇒ ẩn nút "Check my cube".
-    var onCheck: (() -> Void)?
+    /// Quét kiểm tra sau chặng (Teach me). `nil` ⇒ ẩn nút "Check my cube".
+    var check: GuideCheckHooks?
 
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var showNotation = false
+    /// Đang quét kiểm tra ngay trong màn này (camera + khối, ẩn thẻ bước và nút điều khiển).
+    @State private var checking = false
 
     private var top: CubeColor { SolverPieces.opposite(of: session.base, in: session.state) }
 
     var body: some View {
         Group {
-            if sizeClass == .regular {
+            if checking, let check, case .stageDone(let kind) = session.phase {
+                GuideCheckPanel(session: session, kind: kind, palette: palette, white: check.white, deps: check.deps,
+                                onMatched: { checking = false; check.onMatched() },
+                                onSkip: { checking = false; check.onSkipped() },
+                                onRescan: { checking = false; check.onRescan() })
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+            } else if sizeClass == .regular {
                 HStack(alignment: .top, spacing: 24) {
                     VStack(spacing: 14) {
                         header
@@ -60,6 +69,7 @@ struct GuideView: View {
             }
         }
         .sheet(isPresented: $showNotation) { GuideNotationSheet() }
+        .onAppear(perform: openCheckForPreview)
         .onChange(of: session.phase, initial: true) { _, phase in
             if phase == .finished { onFinish() }
         }
@@ -106,7 +116,7 @@ struct GuideView: View {
             GuideStageDoneView(kind: kind,
                                title: GuideText.stageTitle(kind, base: palette.name(session.base), top: palette.name(top)),
                                goal: GuideText.stageGoal(kind, base: palette.name(session.base), top: palette.name(top)),
-                               onCheck: onCheck,
+                               onCheck: check.map { c in { startCheck(c) } },
                                onSkip: { session.continueAfterStage() })
             controls(nextEnabled: false)
         case .finished:
@@ -167,6 +177,18 @@ struct GuideView: View {
         }
     }
 
+    // MARK: - Quét kiểm tra
+
+    private func startCheck(_ c: GuideCheckHooks) {
+        if c.deps.cameraAuth.status() == .authorized { checking = true } else { c.onSkipped() }
+    }
+
+    private func openCheckForPreview() {
+        #if targetEnvironment(simulator)
+        if GuidePreviewSeed.openCheck, let check { startCheck(check) }
+        #endif
+    }
+
     // MARK: - Chữ
 
     /// Chip hiện ở bước đầu mỗi chặng (và luôn ở bước đầu Just solve it) và ở mọi bước xoay cả khối.
@@ -191,4 +213,13 @@ struct GuideView: View {
         if case .hold = r { return true }
         return false
     }
+}
+
+/// Những gì màn giải cần để quét kiểm tra sau chặng.
+struct GuideCheckHooks {
+    let deps: FlowDependencies
+    let white: CubeRGB?
+    let onMatched: () -> Void
+    let onSkipped: () -> Void
+    let onRescan: () -> Void
 }

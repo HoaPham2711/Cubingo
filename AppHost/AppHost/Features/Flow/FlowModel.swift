@@ -116,16 +116,9 @@ final class FlowModel: ObservableObject {
         path.append(.guide(s.mode))
     }
 
-    /// Quét kiểm tra sau chặng.
-    func startCheck() {
-        guard path.last != .check else { return }
-        path.append(.check)
-    }
-
-    /// Mặt chụp khớp ⇒ sang chặng sau, về màn chỉ bước.
+    /// Quét kiểm tra (ngay trong màn giải) khớp ⇒ sang chặng sau.
     func checkMatched() {
         session?.continueAfterStage()
-        if path.last == .check { path.removeLast() }
     }
 
     /// Bỏ qua kiểm tra (cả khi lệch).

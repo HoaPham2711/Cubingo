@@ -49,8 +49,13 @@ final class ScanCaptureModel: ObservableObject {
             live = s
             return
         }
-        let a = Self.smoothing
-        live = zip(live, s).map { o, n in
+        live = Self.smooth(live, s)
+    }
+
+    /// Trung bình trượt hàm mũ một khung.
+    static func smooth(_ old: [CubeRGB], _ new: [CubeRGB]) -> [CubeRGB] {
+        let a = smoothing
+        return zip(old, new).map { o, n in
             CubeRGB(r: o.r + a * (n.r - o.r), g: o.g + a * (n.g - o.g), b: o.b + a * (n.b - o.b))
         }
     }

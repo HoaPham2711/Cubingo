@@ -37,7 +37,6 @@ final class FlowEndToEndTests: XCTestCase {
                 let samples = (0..<9).map { flow.palette!.rgb(s.state.color(spec.face, $0)) }
                 XCTAssertEqual(GuideCheckFlow.outcome(samples: samples, palette: flow.palette!, spec: spec,
                                                       expected: s.state), .match)
-                flow.startCheck()
                 flow.checkMatched()
             case .finished: break
             }

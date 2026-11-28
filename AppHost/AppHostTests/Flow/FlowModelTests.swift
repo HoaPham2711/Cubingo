@@ -79,4 +79,16 @@ final class FlowModelTests: XCTestCase {
         XCTAssertFalse(flow.isRechecking)
         assertOneRealityView(flow)
     }
+
+    func testKhongConRouteCheck() {
+        let flow = FlowModel()
+        flow.choose(.cube3)
+        flow.didReview(ScanPreviewSeed.state, palette: .manualDefault)
+        flow.begin(GuidePreviewSeed.stageDone())
+        let before = flow.path
+        flow.checkMatched()
+        XCTAssertEqual(flow.path, before)
+        XCTAssertEqual(flow.session?.phase, .step)
+        assertOneRealityView(flow)
+    }
 }

@@ -33,27 +33,11 @@ struct ScanView: View {
     @State private var arrowToken = 0
     @State private var poseToken = 0
     @State private var effect: Cube3DEffect?
-    @Environment(\.horizontalSizeClass) private var sizeClass
 
     static let replaySeconds: UInt64 = 2_500_000_000
 
     var body: some View {
-        GeometryReader { geo in
-            let wide = sizeClass == .regular && geo.size.width > geo.size.height
-            Group {
-                if wide {
-                    HStack(spacing: 16) {
-                        cameraPanel.frame(width: geo.size.width * 0.58)
-                        cubePanel
-                    }
-                } else {
-                    VStack(spacing: 8) {
-                        cameraPanel.frame(height: geo.size.height * 0.55)
-                        cubePanel
-                    }
-                }
-            }
-        }
+        ScanSplitLayout(camera: { cameraPanel }, cube: { cubePanel })
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
         .styleBackground()
@@ -86,65 +70,20 @@ struct ScanView: View {
     // MARK: - Camera
 
     private var cameraPanel: some View {
-        GeometryReader { geo in
-            let frame = camera.hasLivePreview
-                ? ScanPreviewLayer.frameRect(in: geo.size)
-                : ScanSampler.frameRect(in: geo.size)
-            ZStack(alignment: .topLeading) {
-                if camera.hasLivePreview {
-                    ScanPreviewLayer(session: camera.session)
-                } else {
-                    Color(hex: 0x2B1D14)
-                }
-                ScanFrameOverlay()
-                    .frame(width: frame.width, height: frame.height)
-                    .offset(x: frame.minX, y: frame.minY)
-                if model.awaitingTurn, model.stepIndex < model.steps.count {
-                    let r = frame.insetBy(dx: -frame.width * 0.22, dy: -frame.height * 0.22)
-                    ScanTurnArrow(turn: model.step.turn, token: arrowToken)
-                        .frame(width: r.width, height: r.height)
-                        .offset(x: r.minX, y: r.minY)
-                }
-                topButtons
-                if let tip {
-                    Image(systemName: tip == .tooDark ? "lightbulb.fill" : "sun.max.fill")
-                        .scaledFont(size: 20, weight: .bold, design: .rounded)
-                        .foregroundColor(.yellow)
-                        .padding(10)
-                        .background(Circle().fill(Color.black.opacity(0.45)))
-                        .symbolEffect(.pulse)
-                        .padding(12)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
-                        .accessibilityLabel(Text(tip == .tooDark ? "Too dark" : "Too much glare"))
-                }
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        }
-    }
-
-    private var topButtons: some View {
-        HStack(spacing: 10) {
-            roundButton("chevron.left", label: String(localized: "Back")) { flow.scanBack() }
+        ScanCameraPanel(camera: camera,
+                        arrow: model.awaitingTurn && model.stepIndex < model.steps.count ? model.step.turn : nil,
+                        arrowToken: arrowToken, tip: tip) {
+            ScanRoundButton(icon: "chevron.left", label: String(localized: "Back")) { flow.scanBack() }
             Spacer()
-            roundButton("square.grid.3x3", label: String(localized: "Enter colors manually")) {
+            ScanRoundButton(icon: "square.grid.3x3", label: String(localized: "Enter colors manually")) {
                 flow.path.append(.review(manual: true))
             }
             if model.canUndo {
-                roundButton("arrow.uturn.backward", label: String(localized: "Undo last side")) { model.undoLast() }
+                ScanRoundButton(icon: "arrow.uturn.backward", label: String(localized: "Undo last side")) {
+                    model.undoLast()
+                }
             }
         }
-        .padding(12)
-    }
-
-    private func roundButton(_ icon: String, label: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: icon)
-                .scaledFont(size: 16, weight: .bold, design: .rounded)
-                .foregroundColor(.white)
-                .frame(width: 36, height: 36)
-                .background(Circle().fill(Color.black.opacity(0.45)))
-        }
-        .accessibilityLabel(Text(label))
     }
 
     // MARK: - Khối
@@ -164,16 +103,8 @@ struct ScanView: View {
                 .accessibilityLabel(Text(ScanText.accessibility(step: model.step, captured: model.capturedCount,
                                                                 awaitingTurn: model.awaitingTurn)))
             ZStack {
-                Button(action: press) {
-                    Image(systemName: "checkmark")
-                        .scaledFont(size: 28, weight: .heavy, design: .rounded)
-                        .foregroundColor(.white)
-                        .frame(width: 64, height: 64)
-                        .background(Circle().fill(DSColor.accent))
-                        .shadow(color: DSColor.accent.opacity(0.35), radius: 8, y: 3)
-                }
-                .opacity(model.live.count == 9 || model.capturedCount == model.steps.count ? 1 : 0.4)
-                .accessibilityLabel(Text("Capture this side"))
+                ScanShutterButton(ready: model.live.count == 9 || model.capturedCount == model.steps.count,
+                                  action: press)
                 Text(verbatim: "\(model.capturedCount)/6")
                     .scaledFont(size: 15, weight: .bold, design: .rounded)
                     .foregroundColor(DSColor.textSecondary)
@@ -208,29 +139,5 @@ struct ScanView: View {
         #if targetEnvironment(simulator)
         ScanPreviewSeed.apply(to: model)
         #endif
-    }
-}
-
-/// Khung 3×3 trên vùng lấy mẫu: viền nhấn + đường chia ô (không có chấm màu — màu sống hiện trên khối 3D).
-private struct ScanFrameOverlay: View {
-    var body: some View {
-        GeometryReader { geo in
-            let w = geo.size.width, h = geo.size.height
-            ZStack {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .strokeBorder(DSColor.accent, lineWidth: 3)
-                Path { p in
-                    for k in 1...2 {
-                        let x = w * CGFloat(k) / 3, y = h * CGFloat(k) / 3
-                        p.move(to: CGPoint(x: x, y: 0))
-                        p.addLine(to: CGPoint(x: x, y: h))
-                        p.move(to: CGPoint(x: 0, y: y))
-                        p.addLine(to: CGPoint(x: w, y: y))
-                    }
-                }
-                .stroke(DSColor.accent.opacity(0.55), lineWidth: 1.5)
-            }
-        }
-        .accessibilityHidden(true)
     }
 }
