@@ -45,7 +45,7 @@ struct ScanReviewView: View {
                         .buttonStyle(StyleThickButton())
                 }
                 if !model.isManual {
-                    Button("Scan again") { flow.path.removeLast() }
+                    Button("Scan again") { flow.rescanFromReview() }
                         .buttonStyle(StyleThickButton(kind: .secondary))
                 }
             }

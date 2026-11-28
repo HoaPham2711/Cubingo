@@ -91,7 +91,8 @@ struct ScanView: View {
     private var pose: Cube3DPose {
         let i = model.stepIndex
         let from = model.awaitingTurn && i > 0 && i < model.steps.count ? model.steps[i - 1].orientation : nil
-        return Cube3DPose(orientation: model.pose, replayFrom: from, token: poseToken, viewFromLeft: true)
+        return Cube3DPose(orientation: model.pose, replayFrom: from, token: poseToken, viewFromLeft: true,
+                          via: ScanProtocol.flipMidpoint)
     }
 
     private var cubePanel: some View {

@@ -92,7 +92,12 @@ final class Cube3DController {
     private var poseToken: Int?
     private var poseTask: Task<Void, Never>?
     private var effectToken: Int?
-    private var effectTask: Task<Void, Never>?
+    private var shakeTask: Task<Void, Never>?
+    private var flashTask: Task<Void, Never>?
+    /// Màu đang vẽ trên từng entity ô — chỉ gán lại vật liệu khi màu thật sự đổi (màu sống cập nhật ~15 lần/giây).
+    private var entityRGB: [ObjectIdentifier: CubeRGB] = [:]
+    /// Số lần gán vật liệu ô (test).
+    private(set) var materialAssignments = 0
     private var glowFace: CubeFace?
     private var glowEntities: [CubeFace: Entity] = [:]
     private var glowTask: Task<Void, Never>?
@@ -201,6 +206,7 @@ final class Cube3DController {
             poseToken = p.token
             return
         }
+        let previous = poseOrientation
         poseToken = p.token
         poseOrientation = p.orientation
         poseTask?.cancel()
@@ -208,19 +214,35 @@ final class Cube3DController {
             cubeRoot.orientation = targetOrientation
             return
         }
-        if replay, let from = p.replayFrom { cubeRoot.orientation = rest * from }
-        var t = cubeRoot.transform
-        t.rotation = targetOrientation
-        cubeRoot.move(to: t, relativeTo: shakeRoot, duration: Cube3DPose.turnSeconds, timingFunction: .easeInOut)
+        var start = previous
+        if replay, let from = p.replayFrom {
+            start = from
+            cubeRoot.orientation = rest * from
+        }
+        let path = Cube3DPose.waypoints(from: start, to: p.orientation, via: p.via)
+        let each = Cube3DPose.turnSeconds * (path.count > 1 ? 0.65 : 1)
+        let view = rest
+        poseTask = Task { @MainActor [weak self] in
+            for q in path {
+                guard let self, !Task.isCancelled else { return }
+                var t = self.cubeRoot.transform
+                t.rotation = view * q
+                self.cubeRoot.move(to: t, relativeTo: self.shakeRoot, duration: each,
+                                   timingFunction: path.count > 1 ? .linear : .easeInOut)
+                try? await Task.sleep(nanoseconds: UInt64(each * 1_000_000_000))
+            }
+        }
     }
 
     func play(_ e: Cube3DEffect?) {
         guard let e, e.token != effectToken else { return }
         effectToken = e.token
-        effectTask?.cancel()
         switch e.kind {
         case .shake:
-            effectTask = Task { @MainActor [weak self] in
+            // Lần lắc cũ bị thay ⇒ trả khối về thẳng trước (không để nghiêng dở).
+            shakeTask?.cancel()
+            shakeRoot.transform.rotation = simd_quatf(angle: 0, axis: SIMD3(0, 1, 0))
+            shakeTask = Task { @MainActor [weak self] in
                 for a: Float in [0.12, -0.12, 0.08, -0.08, 0] {
                     guard let self, !Task.isCancelled else { return }
                     var t = self.shakeRoot.transform
@@ -230,7 +252,13 @@ final class Cube3DController {
                 }
             }
         case .flash(let indices):
-            effectTask = Task { @MainActor [weak self] in
+            // Lần nháy cũ bị thay ⇒ ô cũ về màu thường ngay.
+            flashTask?.cancel()
+            if !flashing.isEmpty {
+                flashing = []
+                repaint()
+            }
+            flashTask = Task { @MainActor [weak self] in
                 for on in [true, false, true, false] {
                     guard let self, !Task.isCancelled else { return }
                     self.flashing = on ? Set(indices) : []
@@ -294,6 +322,7 @@ final class Cube3DController {
         cubeRoot.children.removeAll()
         cubieEntities = [:]
         stickerEntities = [:]
+        entityRGB = [:]
         let body = SimpleMaterial(color: UIColor(white: 0.08, alpha: 1), roughness: 0.7, isMetallic: false)
         let base = Cube3DScene(.solved(n: n))
         for c in base.cubies {
@@ -338,9 +367,14 @@ final class Cube3DController {
                 shownRGB[idx] = rgb
                 // Sáng nhẹ: đủ thấy lớp sắp quay mà không làm màu đổi tên (đỏ thành hồng…).
                 let k: CGFloat = lit.contains(i) ? 0.12 : 0
-                let ui = UIColor(red: rgb.r + (1 - rgb.r) * k, green: rgb.g + (1 - rgb.g) * k,
-                                 blue: rgb.b + (1 - rgb.b) * k, alpha: 1)
-                stickerEntities[c.id]?[normal]?.model?.materials = [UnlitMaterial(color: ui)]
+                let drawn = CubeRGB(r: rgb.r + (1 - rgb.r) * k, g: rgb.g + (1 - rgb.g) * k, b: rgb.b + (1 - rgb.b) * k)
+                guard let entity = stickerEntities[c.id]?[normal] else { continue }
+                let key = ObjectIdentifier(entity)
+                guard entityRGB[key] != drawn else { continue }
+                entityRGB[key] = drawn
+                materialAssignments += 1
+                entity.model?.materials = [UnlitMaterial(color: UIColor(red: drawn.r, green: drawn.g, blue: drawn.b,
+                                                                        alpha: 1))]
             }
         }
         arrow?.removeFromParent()

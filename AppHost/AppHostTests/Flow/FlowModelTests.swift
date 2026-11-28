@@ -91,4 +91,33 @@ final class FlowModelTests: XCTestCase {
         XCTAssertEqual(flow.session?.phase, .step)
         assertOneRealityView(flow)
     }
+
+    // Review #2: "Scan again" ở màn kiểm tra ⇒ quét mới từ đầu (đổi thế hệ màn quét).
+    func testScanAgainQuetMoi() {
+        let flow = FlowModel()
+        flow.choose(.cube3)
+        flow.didScan(ScanPreviewSeed.scanResultWithMistake)
+        let g = flow.scanGeneration
+        flow.rescanFromReview()
+        XCTAssertEqual(flow.path, [.scan])
+        XCTAssertNotEqual(flow.scanGeneration, g)
+    }
+
+    // Review #3: bấm ✓ lặp ở 6/6 không chồng màn hay phá luồng quét lại.
+    func testDidScanLapKhongChong() {
+        let flow = FlowModel()
+        flow.choose(.cube3)
+        flow.didScan(ScanPreviewSeed.scanResultWithMistake)
+        flow.didScan(ScanPreviewSeed.scanResultWithMistake)
+        XCTAssertEqual(flow.path, [.scan, .review(manual: false)])
+
+        let f2 = FlowModel()
+        f2.choose(.cube3)
+        f2.didReview(ScanPreviewSeed.state, palette: .manualDefault)
+        f2.begin(GuidePreviewSeed.stageDone())
+        f2.startRescan()
+        f2.didScan(ScanPreviewSeed.scanResult)
+        f2.didScan(ScanPreviewSeed.scanResult)
+        XCTAssertEqual(f2.path, [.guide(.teach)])
+    }
 }

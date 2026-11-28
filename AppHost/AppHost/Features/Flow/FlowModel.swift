@@ -29,6 +29,8 @@ final class FlowModel: ObservableObject {
     @Published private(set) var isSolving = false
     /// Đang quét lại cả khối sau quét kiểm tra lệch (kết quả kiểm tra ⇒ lập lại lời giải, không mở phiên mới).
     @Published private(set) var isRechecking = false
+    /// Đổi ⇒ màn quét dựng mới (quét lại từ đầu thay vì về đúng chỗ đang dở).
+    @Published private(set) var scanGeneration = 0
 
     /// Chỉ nhận khối đang có; đẩy màn quét.
     func choose(_ p: FlowPuzzle) {
@@ -52,6 +54,8 @@ final class FlowModel: ObservableObject {
     /// Quét xong: khối hợp lệ (hoặc tự sửa được hướng U/D) ⇒ đi thẳng; có lỗi ⇒ màn kiểm tra màu (không có
     /// `RealityView`, được tạm nằm trên màn quét).
     func didScan(_ r: ScanResult) {
+        // Bấm ✓ lặp ở 6/6 khi màn khác đã đẩy lên / luồng đã đi tiếp ⇒ bỏ qua.
+        guard path.last == .scan else { return }
         scan = r
         let review = ScanReviewModel(scan: r)
         switch review.validate() {
@@ -64,6 +68,10 @@ final class FlowModel: ObservableObject {
 
     /// Khối hợp lệ từ màn kiểm tra / nhập tay.
     func didReview(_ f: CubeFacelets, palette: CubePalette, white: CubeRGB? = nil) {
+        switch path.last {
+        case .scan?, .review?: break
+        default: return
+        }
         finishScan(f, palette: palette, white: white)
     }
 
@@ -84,6 +92,14 @@ final class FlowModel: ObservableObject {
     func rescanFromMode() {
         scan = nil
         cube = nil
+        scanGeneration += 1
+        path = [.scan]
+    }
+
+    /// "Scan again" ở màn kiểm tra màu ⇒ quét mới từ đầu.
+    func rescanFromReview() {
+        scan = nil
+        scanGeneration += 1
         path = [.scan]
     }
 
@@ -127,6 +143,7 @@ final class FlowModel: ObservableObject {
     /// Lệch ⇒ quét lại cả khối.
     func startRescan() {
         isRechecking = true
+        scanGeneration += 1
         path = [.scan]
     }
 

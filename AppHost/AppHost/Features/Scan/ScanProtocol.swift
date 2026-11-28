@@ -22,6 +22,9 @@ enum ScanProtocol {
         }
     }()
 
+    /// Tư thế giữa của bước lật 180° (U → D): lật thêm một nấc từ U ⇒ mặt R hướng vào camera.
+    static let flipMidpoint = simd_normalize(ScanOrientation.rotation(.tiltTowardYou) * cube3[4].orientation)
+
     /// 6 ảnh (theo thứ tự bước) ⇒ 54 mẫu theo thứ tự Kociemba (U R F D L B).
     static func assemble(_ images: [[CubeRGB]]) -> [CubeRGB] {
         var out = [CubeRGB](repeating: CubeRGB(r: 0, g: 0, b: 0), count: 54)
