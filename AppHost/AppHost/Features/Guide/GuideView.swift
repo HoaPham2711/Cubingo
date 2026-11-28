@@ -14,6 +14,9 @@ struct GuideView: View {
     @State private var showNotation = false
     /// Đang quét kiểm tra ngay trong màn này (camera + khối, ẩn thẻ bước và nút điều khiển).
     @State private var checking = false
+    /// Tự chạy liên tiếp từng bước.
+    @State private var autoplay = false
+    @State private var autoplayTick = 0
 
     private var top: CubeColor { SolverPieces.opposite(of: session.base, in: session.state) }
 
@@ -71,7 +74,15 @@ struct GuideView: View {
         .sheet(isPresented: $showNotation) { GuideNotationSheet() }
         .onAppear(perform: openCheckForPreview)
         .onChange(of: session.phase, initial: true) { _, phase in
+            if phase != .step { autoplay = false }
             if phase == .finished { onFinish() }
+        }
+        // Một bước quay xong ⇒ chờ một nhịp rồi tự làm bước kế (nếu vẫn đang tự chạy).
+        .task(id: autoplayTick) {
+            guard autoplay, autoplayTick > 0 else { return }
+            try? await Task.sleep(nanoseconds: UInt64(GuideAutoplay.gap(prefs.speed) * 1_000_000_000))
+            guard autoplay, !Task.isCancelled else { return }
+            if !GuideAutoplay.tick(session) { autoplay = false }
         }
         .trackScreen("guide_steps")
     }
@@ -105,7 +116,8 @@ struct GuideView: View {
 
     private var cube: some View {
         Cube3DView(state: session.state, palette: palette, animation: session.animation, speed: prefs.speed,
-                   highlight: session.currentStep?.move)
+                   highlight: session.currentStep?.move,
+                   onAnimationEnd: { if autoplay { autoplayTick += 1 } })
             .frame(maxWidth: .infinity, maxHeight: 520)
     }
 
@@ -137,18 +149,33 @@ struct GuideView: View {
 
     private func controls(nextEnabled: Bool) -> some View {
         HStack(spacing: 12) {
-            Button { session.back() } label: { Image(systemName: "chevron.backward") }
+            Button { autoplay = false; session.back() } label: { Image(systemName: "chevron.backward") }
                 .buttonStyle(StyleThickButton(kind: .secondary))
-                .frame(width: 72)
+                .frame(width: 64)
                 .accessibilityLabel(Text("Back"))
-            Button { session.replay() } label: { Image(systemName: "arrow.counterclockwise") }
+            Button { autoplay = false; session.replay() } label: { Image(systemName: "arrow.counterclockwise") }
                 .buttonStyle(StyleThickButton(kind: .secondary))
-                .frame(width: 72)
+                .frame(width: 64)
                 .accessibilityLabel(Text("Replay"))
-            Button("Next") { session.next() }
+            Button { toggleAutoplay() } label: { Image(systemName: autoplay ? "pause.fill" : "play.fill") }
+                .buttonStyle(StyleThickButton(kind: .secondary))
+                .frame(width: 64)
+                .disabled(!nextEnabled)
+                .opacity(nextEnabled ? 1 : 0.4)
+                .accessibilityLabel(Text(autoplay ? "Pause" : "Play all steps"))
+            Button("Next") { autoplay = false; session.next() }
                 .buttonStyle(StyleThickButton())
                 .disabled(!nextEnabled)
                 .opacity(nextEnabled ? 1 : 0.4)
+        }
+    }
+
+    private func toggleAutoplay() {
+        if autoplay {
+            autoplay = false
+        } else {
+            autoplay = true
+            if !GuideAutoplay.tick(session) { autoplay = false }
         }
     }
 

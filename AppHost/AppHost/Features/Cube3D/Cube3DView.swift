@@ -177,8 +177,9 @@ final class Cube3DController {
             cancelAnimation()
             let move = animation.reverse ? animation.move.inverse : animation.move
             let start = animation.reverse ? state.applying(animation.move) : state.applying(animation.move.inverse)
-            show(Cube3DScene(start), palette: palette, highlight: nil)
-            animate(move, quarter: speed.quarterTurnSeconds) { [weak self] in
+            // Đứng yên một nhịp với mũi tên của bước, rồi mới quay.
+            show(Cube3DScene(start), palette: palette, highlight: animation.reverse ? nil : animation.move)
+            animate(move, quarter: speed.quarterTurnSeconds, leadIn: speed.leadInSeconds) { [weak self] in
                 guard let self else { return }
                 self.show(Cube3DScene(state), palette: palette, highlight: highlight)
                 onEnd()
@@ -415,16 +416,18 @@ final class Cube3DController {
 
     /// Quay lớp: gom khối con vào entity cha tạm, quay cha, xong thì trả về gốc. Bước kép = hai nấc, mỗi nấc 0,75 ×
     /// thời lượng (tổng ×1,5).
-    private func animate(_ m: CubeMove, quarter: Double, completion: @escaping () -> Void) {
+    private func animate(_ m: CubeMove, quarter: Double, leadIn: Double = 0, completion: @escaping () -> Void) {
         guard var s = scene else { return completion() }
         animating = true
-        arrow?.removeFromParent()
-        arrow = nil
         let steps = m.turns == 2 ? [CubeMove(m.axis, 1), CubeMove(m.axis, 1)] : [m]
         let each = m.turns == 2 ? quarter * 0.75 : quarter
         let ids = s.members(m).map { s.cubies[$0].id }
         let token = lastToken
         animationTask = Task { @MainActor [weak self] in
+            if leadIn > 0 { try? await Task.sleep(nanoseconds: UInt64(leadIn * 1_000_000_000)) }
+            guard !Task.isCancelled, self?.lastToken == token else { return }
+            self?.arrow?.removeFromParent()
+            self?.arrow = nil
             for step in steps {
                 guard let self, !Task.isCancelled else { return }
                 let pivot = Entity()

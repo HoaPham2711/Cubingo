@@ -54,6 +54,7 @@ struct GuideCheckPanel: View {
         return ScanCameraPanel(camera: camera, arrow: turn != .none && !onRequestedSide ? turn : nil,
                                arrowToken: token, tip: tip) {
             Spacer()
+            ScanTorchButton(camera: camera, highlight: tip == .tooDark)
             ScanRoundButton(icon: "forward.end.fill", label: String(localized: "Skip check"), action: onSkip)
         }
     }

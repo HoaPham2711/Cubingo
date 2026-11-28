@@ -49,4 +49,21 @@ final class ScanSamplerTests: XCTestCase {
             XCTAssertEqual(s[i].b, Double(c.2) / 255, accuracy: 1.0 / 255)
         }
     }
+
+    /// Camera để xa hoặc ánh sáng kém: ô lẫn viền đen / bóng (tới 40 %) và vệt chói — màu lấy ra vẫn là màu ô.
+    func testMauOBoVienDenVaVetChoi() {
+        let sticker = (r: 200, g: 40, b: 30)
+        var px: [(Int, Int, Int)] = Array(repeating: sticker, count: 55)
+        px += Array(repeating: (12, 12, 14), count: 40)
+        px += Array(repeating: (255, 255, 255), count: 5)
+        px.shuffle()
+        let c = ScanSampler.robustColor(px)
+        XCTAssertEqual(c.r, 200.0 / 255, accuracy: 0.02)
+        XCTAssertEqual(c.g, 40.0 / 255, accuracy: 0.02)
+        XCTAssertEqual(c.b, 30.0 / 255, accuracy: 0.02)
+        // Ô đều màu thì như trung bình thường.
+        let flat = ScanSampler.robustColor(Array(repeating: (100, 150, 200), count: 30))
+        XCTAssertEqual(flat.g, 150.0 / 255, accuracy: 0.005)
+        XCTAssertEqual(ScanSampler.robustColor([]).r, 0)
+    }
 }

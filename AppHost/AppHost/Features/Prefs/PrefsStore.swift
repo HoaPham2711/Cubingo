@@ -7,11 +7,14 @@ enum PrefsSpeed: String, CaseIterable {
     /// Thời lượng một bước xoay 90° (bước kép ×1,5 — `Cube3DView`).
     var quarterTurnSeconds: Double {
         switch self {
-        case .slow: return 0.9
-        case .medium: return 0.5
-        case .fast: return 0.25
+        case .slow: return 1.4
+        case .medium: return 0.9
+        case .fast: return 0.5
         }
     }
+
+    /// Dừng trước khi quay (khối đứng yên, mũi tên hiện) để mắt kịp bắt lớp sắp quay.
+    var leadInSeconds: Double { quarterTurnSeconds * 0.5 }
 
     var label: String {
         switch self {

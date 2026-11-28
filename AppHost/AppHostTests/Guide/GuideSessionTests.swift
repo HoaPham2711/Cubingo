@@ -150,4 +150,21 @@ final class GuideCheckTests: XCTestCase {
         XCTAssertEqual(GuideCheck.spec(.topCorners), GuideCheckSpec(face: .f, indices: [0, 2], anyRotation: false))
         XCTAssertEqual(GuideCheck.spec(.topFace).face, .u)
     }
+
+    // Tự chạy: mỗi nhịp làm một bước, dừng ở cuối chặng; nhịp chờ đủ để vừa xem vừa làm theo.
+    @MainActor
+    func testTuChayDungOCuoiChang() {
+        var rng = CubeRandom(seed: 3)
+        let start = CubeRandom.state(using: &rng).facelets(centers: cubeStandardCenters)
+        let stages = SolverBeginner.solve(start, base: start.center(.u))
+        let s = GuideSession(mode: .teach, stages: stages, base: start.center(.u))
+        let n = s.stepCount
+        var ticks = 0
+        while GuideAutoplay.tick(s) { ticks += 1 }
+        XCTAssertEqual(ticks, n)
+        XCTAssertNotEqual(s.phase, .step)
+        XCTAssertFalse(GuideAutoplay.tick(s), "đã dừng thì không chạy tiếp")
+        XCTAssertGreaterThanOrEqual(GuideAutoplay.gap(.medium), 0.9)
+        XCTAssertGreaterThan(GuideAutoplay.gap(.slow), GuideAutoplay.gap(.fast))
+    }
 }

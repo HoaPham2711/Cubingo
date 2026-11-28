@@ -56,7 +56,11 @@ struct ScanView: View {
             model.observe(s)
             tip = ScanLighting.tip(s)
         }
-        .onChange(of: model.stepIndex) { _, _ in camera.expect(model.step) }
+        .onChange(of: model.stepIndex) { _, _ in
+            camera.expect(model.step)
+            // Khoá cân bằng trắng từ mặt thứ hai (màu các mặt so được với nhau); quét lại từ đầu ⇒ mở khoá.
+            camera.lockWhiteBalance(model.capturedCount > 0)
+        }
         // Chưa xoay ⇒ nhắc lại mũi tên và động tác mẫu mỗi 2,5 s.
         .task(id: model.awaitingTurn) {
             while model.awaitingTurn, !Task.isCancelled {
@@ -77,6 +81,7 @@ struct ScanView: View {
                         arrowToken: arrowToken, tip: tip) {
             ScanRoundButton(icon: "chevron.left", label: String(localized: "Back")) { flow.scanBack() }
             Spacer()
+            ScanTorchButton(camera: camera, highlight: tip == .tooDark)
             ScanRoundButton(icon: "square.grid.3x3", label: String(localized: "Enter colors manually")) {
                 flow.path.append(.review(manual: true))
             }

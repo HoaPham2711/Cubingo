@@ -6,6 +6,11 @@ import QuartzCore
 @MainActor
 final class ScanCamera: ObservableObject {
     @Published private(set) var samples: [CubeRGB] = []
+    @Published private(set) var torchOn = false
+    private var device: AVCaptureDevice?
+
+    /// Máy có đèn pin (Simulator: không).
+    var hasTorch: Bool { device?.hasTorch ?? false }
 
     let session = AVCaptureSession()
     private let queue = DispatchQueue(label: "scan.camera")
@@ -35,7 +40,25 @@ final class ScanCamera: ObservableObject {
         #endif
     }
 
+    /// Khoá cân bằng trắng sau mặt đầu: camera tự chỉnh trắng theo từng mặt làm cùng một màu lệch nhau giữa các mặt.
+    func lockWhiteBalance(_ locked: Bool) {
+        guard let device, (try? device.lockForConfiguration()) != nil else { return }
+        defer { device.unlockForConfiguration() }
+        let mode: AVCaptureDevice.WhiteBalanceMode = locked ? .locked : .continuousAutoWhiteBalance
+        if device.isWhiteBalanceModeSupported(mode) { device.whiteBalanceMode = mode }
+    }
+
+    /// Bật / tắt đèn pin (phòng tối).
+    func setTorch(_ on: Bool) {
+        guard let device, device.hasTorch, (try? device.lockForConfiguration()) != nil else { return }
+        defer { device.unlockForConfiguration() }
+        if on { try? device.setTorchModeOn(level: 0.6) } else { device.torchMode = .off }
+        torchOn = on && device.torchMode == .on
+    }
+
     func stop() {
+        setTorch(false)
+        lockWhiteBalance(false)
         #if targetEnvironment(simulator)
         seedTask?.cancel()
         seedTask = nil
@@ -84,6 +107,7 @@ final class ScanCamera: ObservableObject {
             return
         }
         session.addInput(input)
+        self.device = device
         let output = AVCaptureVideoDataOutput()
         output.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
         output.alwaysDiscardsLateVideoFrames = true

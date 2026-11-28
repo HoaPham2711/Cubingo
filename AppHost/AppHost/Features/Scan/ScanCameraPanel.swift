@@ -131,3 +131,24 @@ struct ScanSplitLayout<Camera: View, Cube: View>: View {
         }
     }
 }
+
+/// Nút đèn pin (chỉ hiện khi máy có đèn); `highlight` ⇒ viền vàng nhấp nháy khi phòng quá tối.
+struct ScanTorchButton: View {
+    @ObservedObject var camera: ScanCamera
+    let highlight: Bool
+
+    var body: some View {
+        if camera.hasTorch {
+            Button { camera.setTorch(!camera.torchOn) } label: {
+                Image(systemName: camera.torchOn ? "flashlight.on.fill" : "flashlight.off.fill")
+                    .scaledFont(size: 16, weight: .bold, design: .rounded)
+                    .foregroundColor(camera.torchOn ? .yellow : .white)
+                    .frame(width: 36, height: 36)
+                    .background(Circle().fill(Color.black.opacity(0.45)))
+                    .overlay(Circle().strokeBorder(Color.yellow, lineWidth: highlight && !camera.torchOn ? 2 : 0))
+                    .symbolEffect(.pulse, isActive: highlight && !camera.torchOn)
+            }
+            .accessibilityLabel(Text(camera.torchOn ? "Turn off flashlight" : "Turn on flashlight"))
+        }
+    }
+}
