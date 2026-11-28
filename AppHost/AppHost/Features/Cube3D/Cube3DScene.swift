@@ -75,6 +75,14 @@ struct Cube3DScene: Equatable {
         return CubeFacelets(n: n, stickers: stickers)
     }
 
+    /// Chỉ số facelet (Kociemba) của ô `local` (pháp tuyến ban đầu) trên khối con thứ `cubie`, ở vị trí hiện tại.
+    func faceletIndex(cubie: Int, local: SIMD3<Int>) -> Int {
+        let c = cubies[cubie]
+        return (n == 3 ? Self.index3 : Self.stickerIndex(n: n))[Key(position: c.position, normal: c.worldNormal(local))]!
+    }
+
+    private static let index3 = stickerIndex(n: 3)
+
     private struct Key: Hashable {
         let position: SIMD3<Int>
         let normal: SIMD3<Int>

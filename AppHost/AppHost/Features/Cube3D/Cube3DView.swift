@@ -21,15 +21,27 @@ struct Cube3DView: View {
     let animation: Cube3DAnimation?
     let speed: PrefsSpeed
     let highlight: CubeMove?
+    /// Tư thế cả khối (màn quét / quét kiểm tra); `nil` = góc nhìn chuẩn.
+    let pose: Cube3DPose?
+    /// Màu thô cho từng ô (đè bảng màu).
+    let paint: Cube3DPaint?
+    /// Mặt có viền phát sáng (khung khối).
+    let glow: CubeFace?
+    let effect: Cube3DEffect?
     let onAnimationEnd: () -> Void
 
     init(state: CubeFacelets, palette: CubePalette, animation: Cube3DAnimation?, speed: PrefsSpeed,
-         highlight: CubeMove?, onAnimationEnd: @escaping () -> Void = {}) {
+         highlight: CubeMove?, pose: Cube3DPose? = nil, paint: Cube3DPaint? = nil, glow: CubeFace? = nil,
+         effect: Cube3DEffect? = nil, onAnimationEnd: @escaping () -> Void = {}) {
         self.state = state
         self.palette = palette
         self.animation = animation
         self.speed = speed
         self.highlight = highlight
+        self.pose = pose
+        self.paint = paint
+        self.glow = glow
+        self.effect = effect
         self.onAnimationEnd = onAnimationEnd
     }
 
@@ -40,11 +52,9 @@ struct Cube3DView: View {
         RealityView { content in
             content.camera = .virtual
             controller.install(in: content)
-            controller.update(state: state, palette: palette, animation: animation, speed: speed,
-                              highlight: highlight, onEnd: onAnimationEnd)
+            sync(animated: false)
         } update: { _ in
-            controller.update(state: state, palette: palette, animation: animation, speed: speed,
-                              highlight: highlight, onEnd: onAnimationEnd)
+            sync(animated: true)
             controller.setDrag(drag)
         }
         .gesture(
@@ -58,13 +68,44 @@ struct Cube3DView: View {
         .accessibilityElement()
         .accessibilityLabel(Text("3D cube"))
     }
+
+    private func sync(animated: Bool) {
+        controller.update(state: state, palette: palette, animation: animation, speed: speed,
+                          highlight: highlight, paint: paint, glow: glow, onEnd: onAnimationEnd)
+        controller.setPose(pose, animated: animated)
+        controller.play(effect)
+    }
 }
 
 /// Giữ entity của khối giữa các lần SwiftUI cập nhật.
 @MainActor
 final class Cube3DController {
     private let world = Entity()
+    /// Cha của `cubeRoot`, chỉ để lắc (không đụng tư thế / kéo xoay).
+    private let shakeRoot = Entity()
     private let cubeRoot = Entity()
+    private var shownPaint: Cube3DPaint??
+    private var paint: Cube3DPaint?
+    private var flashing: Set<Int> = []
+    private var shownRGB: [Int: CubeRGB] = [:]
+    private var poseOrientation = simd_quatf(angle: 0, axis: SIMD3(0, 1, 0))
+    private var poseToken: Int?
+    private var poseTask: Task<Void, Never>?
+    private var effectToken: Int?
+    private var effectTask: Task<Void, Never>?
+    private var glowFace: CubeFace?
+    private var glowEntities: [CubeFace: Entity] = [:]
+    private var glowTask: Task<Void, Never>?
+
+    /// Màu ô chưa có màu (mặt chưa quét) — sáng hơn thân khối chút để vẫn thấy lưới ô.
+    static let blankRGB = CubeRGB(r: 0.16, g: 0.16, b: 0.17)
+    static let flashRGB = CubeRGB(r: 0.898, g: 0.282, b: 0.302)
+
+    /// Màu đang vẽ của ô `index` (test).
+    func displayedStickerRGB(_ index: Int) -> CubeRGB? { shownRGB[index] }
+
+    /// Hướng đích của khối (góc nhìn chuẩn × tư thế), chưa tính kéo tay.
+    var targetOrientation: simd_quatf { Self.restOrientation * poseOrientation }
     private var cubieEntities: [Int: Entity] = [:]
     private var stickerEntities: [Int: [SIMD3<Int>: ModelEntity]] = [:]
     private var scene: Cube3DScene?
@@ -95,15 +136,18 @@ final class Cube3DController {
             camera.camera.fieldOfViewInDegrees = 38
             camera.position = SIMD3(0, 0, 8.2)
             world.addChild(camera)
-            world.addChild(cubeRoot)
-            cubeRoot.orientation = Self.restOrientation
+            world.addChild(shakeRoot)
+            shakeRoot.addChild(cubeRoot)
+            cubeRoot.orientation = targetOrientation
         }
         content.add(world)
     }
 
     func update(state: CubeFacelets, palette: CubePalette, animation: Cube3DAnimation?, speed: PrefsSpeed,
-                highlight: CubeMove?, onEnd: @escaping () -> Void) {
+                highlight: CubeMove?, paint: Cube3DPaint? = nil, glow: CubeFace? = nil, onEnd: @escaping () -> Void) {
         if cubieEntities.isEmpty || scene?.n != state.n { build(n: state.n) }
+        self.paint = paint
+        setGlow(glow)
         if let animation, animation.token != lastToken {
             lastToken = animation.token
             // Hoạt ảnh trước chưa xong (bấm Next/Back nhanh): huỷ, trả mọi khối con về gốc — không để lần hoàn tất cũ
@@ -120,7 +164,8 @@ final class Cube3DController {
             return
         }
         guard !animating else { return }
-        if scene?.facelets() != state || shownPalette != palette || shownHighlight != .some(highlight) {
+        if scene?.facelets() != state || shownPalette != palette || shownHighlight != .some(highlight)
+            || shownPaint != .some(paint) {
             show(Cube3DScene(state), palette: palette, highlight: highlight)
         }
     }
@@ -129,13 +174,111 @@ final class Cube3DController {
         guard t != .zero else { return }
         let yaw = Self.yaw + Float(t.width) / 150
         let pitch = max(-80 * .pi / 180, min(80 * .pi / 180, Self.pitch + Float(t.height) / 150))
-        cubeRoot.orientation = simd_quatf(angle: pitch, axis: SIMD3(1, 0, 0)) * simd_quatf(angle: yaw, axis: SIMD3(0, 1, 0))
+        cubeRoot.orientation = simd_quatf(angle: pitch, axis: SIMD3(1, 0, 0))
+            * simd_quatf(angle: yaw, axis: SIMD3(0, 1, 0)) * poseOrientation
     }
 
     func resetView(duration: TimeInterval) {
         var t = cubeRoot.transform
-        t.rotation = Self.restOrientation
-        cubeRoot.move(to: t, relativeTo: world, duration: duration, timingFunction: .easeInOut)
+        t.rotation = targetOrientation
+        cubeRoot.move(to: t, relativeTo: shakeRoot, duration: duration, timingFunction: .easeInOut)
+    }
+
+    // MARK: - Tư thế, viền sáng, hiệu ứng
+
+    /// Đổi hướng ⇒ quay mượt; `token` mới + `replayFrom` ⇒ về tức thì `replayFrom` rồi diễn lại động tác.
+    func setPose(_ p: Cube3DPose?, animated: Bool) {
+        let p = p ?? Cube3DPose(orientation: simd_quatf(angle: 0, axis: SIMD3(0, 1, 0)), token: poseToken ?? 0)
+        let replay = p.token != poseToken && poseToken != nil && p.replayFrom != nil
+        guard p.orientation != poseOrientation || replay else {
+            poseToken = p.token
+            return
+        }
+        poseToken = p.token
+        poseOrientation = p.orientation
+        poseTask?.cancel()
+        guard animated else {
+            cubeRoot.orientation = targetOrientation
+            return
+        }
+        if replay, let from = p.replayFrom { cubeRoot.orientation = Self.restOrientation * from }
+        var t = cubeRoot.transform
+        t.rotation = targetOrientation
+        cubeRoot.move(to: t, relativeTo: shakeRoot, duration: Cube3DPose.turnSeconds, timingFunction: .easeInOut)
+    }
+
+    func play(_ e: Cube3DEffect?) {
+        guard let e, e.token != effectToken else { return }
+        effectToken = e.token
+        effectTask?.cancel()
+        switch e.kind {
+        case .shake:
+            effectTask = Task { @MainActor [weak self] in
+                for a: Float in [0.12, -0.12, 0.08, -0.08, 0] {
+                    guard let self, !Task.isCancelled else { return }
+                    var t = self.shakeRoot.transform
+                    t.rotation = simd_quatf(angle: a, axis: SIMD3(0, 1, 0))
+                    self.shakeRoot.move(to: t, relativeTo: self.world, duration: 0.07, timingFunction: .easeInOut)
+                    try? await Task.sleep(nanoseconds: 70_000_000)
+                }
+            }
+        case .flash(let indices):
+            effectTask = Task { @MainActor [weak self] in
+                for on in [true, false, true, false] {
+                    guard let self, !Task.isCancelled else { return }
+                    self.flashing = on ? Set(indices) : []
+                    self.repaint()
+                    try? await Task.sleep(nanoseconds: 150_000_000)
+                }
+            }
+        }
+    }
+
+    private func setGlow(_ face: CubeFace?) {
+        guard face != glowFace else { return }
+        glowFace = face
+        for (f, e) in glowEntities { e.isEnabled = f == face }
+        glowTask?.cancel()
+        guard let face, let e = glowEntities[face] else { return }
+        glowTask = Task { @MainActor [weak self] in
+            var phase: Double = 0
+            while !Task.isCancelled {
+                guard self != nil else { return }
+                phase += 0.05 / 1.2
+                e.components.set(OpacityComponent(opacity: Float(0.55 + 0.45 * cos(phase * 2 * .pi))))
+                try? await Task.sleep(nanoseconds: 50_000_000)
+            }
+        }
+    }
+
+    private func repaint() {
+        if let s = scene, let p = shownPalette { show(s, palette: p, highlight: shownHighlight ?? nil) }
+    }
+
+    private func makeGlowFrames(n: Int) {
+        glowEntities.values.forEach { $0.removeFromParent() }
+        glowEntities = [:]
+        let half = Float(n) / 2
+        let mat = UnlitMaterial(color: Cube3DArrow.color)
+        for face in CubeFace.allCases {
+            let g = CubeGeometry.of(n: n)
+            let nv = g.normals[face.rawValue * n * n]
+            let normal = SIMD3<Float>(Float(nv.x), Float(nv.y), Float(nv.z))
+            let root = Entity()
+            let thick: Float = 0.09, len = 2 * half + 0.2
+            for k in 0..<4 {
+                let bar = ModelEntity(mesh: .generateBox(width: len, height: thick, depth: 0.04), materials: [mat])
+                let along: Float = (k % 2 == 0 ? 1 : -1) * (half + 0.05)
+                bar.position = k < 2 ? SIMD3(0, along, 0) : SIMD3(along, 0, 0)
+                if k >= 2 { bar.orientation = simd_quatf(angle: .pi / 2, axis: SIMD3(0, 0, 1)) }
+                root.addChild(bar)
+            }
+            root.orientation = simd_quatf(from: SIMD3(0, 0, 1), to: normal)
+            root.position = normal * (half + 0.03)
+            root.isEnabled = false
+            cubeRoot.addChild(root)
+            glowEntities[face] = root
+        }
     }
 
     // MARK: - Dựng
@@ -162,6 +305,8 @@ final class Cube3DController {
             cubieEntities[c.id] = e
             stickerEntities[c.id] = stickers
         }
+        makeGlowFrames(n: n)
+        glowFace = nil
         let light = DirectionalLight()
         light.light.intensity = 2500
         light.look(at: .zero, from: SIMD3(2, 4, 5), relativeTo: nil)
@@ -173,13 +318,17 @@ final class Cube3DController {
         scene = s
         shownPalette = palette
         shownHighlight = .some(highlight)
+        shownPaint = .some(paint)
         let lit = Set(highlight.map { s.members($0) } ?? [])
         for (i, c) in s.cubies.enumerated() {
             guard let e = cubieEntities[c.id] else { continue }
             e.position = SIMD3<Float>(Float(c.position.x), Float(c.position.y), Float(c.position.z)) / 2
             e.orientation = c.orientation
             for (normal, color) in c.stickers {
-                let rgb = palette.rgb(color)
+                let idx = s.faceletIndex(cubie: i, local: normal)
+                var rgb = paint.map { $0.colors[idx] ?? Self.blankRGB } ?? palette.rgb(color)
+                if flashing.contains(idx) { rgb = Self.flashRGB }
+                shownRGB[idx] = rgb
                 // Sáng nhẹ: đủ thấy lớp sắp quay mà không làm màu đổi tên (đỏ thành hồng…).
                 let k: CGFloat = lit.contains(i) ? 0.12 : 0
                 let ui = UIColor(red: rgb.r + (1 - rgb.r) * k, green: rgb.g + (1 - rgb.g) * k,
