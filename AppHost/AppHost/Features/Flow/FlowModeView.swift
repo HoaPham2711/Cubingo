@@ -43,6 +43,14 @@ struct FlowModeView: View {
         }
         .styleBackground()
         .navigationBarTitleDisplayMode(.inline)
+        // Màn quét đã rời chồng (một RealityView mỗi chồng) ⇒ quay lại = quét lại từ đầu.
+        .navigationBarBackButtonHidden(true)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button { flow.rescanFromMode() } label: { Image(systemName: "chevron.left") }
+                    .accessibilityLabel(Text("Scan again"))
+            }
+        }
         .overlay {
             if flow.isSolving {
                 VStack(spacing: 12) {

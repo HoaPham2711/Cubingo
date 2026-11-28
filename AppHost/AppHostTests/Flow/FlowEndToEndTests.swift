@@ -19,11 +19,9 @@ final class FlowEndToEndTests: XCTestCase {
         let flow = FlowModel()
         flow.choose(.cube3)
         flow.didScan(result)
-        XCTAssertEqual(flow.path, [.scan, .review(manual: false)])
-        let review = ScanReviewModel(scan: flow.scan!)
-        guard case .ok(let cube) = review.validate() else { return XCTFail("quét phải hợp lệ") }
-        XCTAssertEqual(cube, f)
-        flow.didReview(cube, palette: review.palette)
+        // Quét hợp lệ ⇒ đi thẳng sang màn chọn cách giải (không qua màn kiểm tra).
+        XCTAssertEqual(flow.path, [.mode])
+        XCTAssertEqual(flow.cube, f)
         XCTAssertEqual(flow.palette?.colorName(flow.palette!.baseColor), .white)
         await flow.startGuide(.teach, quickSolver: SolverQuick(tables: { solverTestTables }))
         let s = flow.session!
