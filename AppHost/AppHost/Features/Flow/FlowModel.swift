@@ -37,6 +37,18 @@ final class FlowModel: ObservableObject {
         path = [.scan]
     }
 
+    /// Nút quay lại của màn quét: đang quét lại sau quét kiểm tra lệch ⇒ về màn giải với phiên cũ; ngược lại ⇒ màn
+    /// chọn khối.
+    func scanBack() {
+        if isRechecking, session != nil {
+            isRechecking = false
+            path = [.guide(.teach)]
+        } else {
+            isRechecking = false
+            path = []
+        }
+    }
+
     /// Quét xong ⇒ màn kiểm tra màu.
     func didScan(_ r: ScanResult) {
         scan = r

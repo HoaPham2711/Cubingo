@@ -105,7 +105,11 @@ final class Cube3DController {
     func displayedStickerRGB(_ index: Int) -> CubeRGB? { shownRGB[index] }
 
     /// Hướng đích của khối (góc nhìn chuẩn × tư thế), chưa tính kéo tay.
-    var targetOrientation: simd_quatf { Self.restOrientation * poseOrientation }
+    var targetOrientation: simd_quatf { rest * poseOrientation }
+    private var viewYaw = Cube3DController.yaw
+    private var rest: simd_quatf {
+        simd_quatf(angle: Self.pitch, axis: SIMD3(1, 0, 0)) * simd_quatf(angle: viewYaw, axis: SIMD3(0, 1, 0))
+    }
     private var cubieEntities: [Int: Entity] = [:]
     private var stickerEntities: [Int: [SIMD3<Int>: ModelEntity]] = [:]
     private var scene: Cube3DScene?
@@ -172,7 +176,7 @@ final class Cube3DController {
 
     func setDrag(_ t: CGSize) {
         guard t != .zero else { return }
-        let yaw = Self.yaw + Float(t.width) / 150
+        let yaw = viewYaw + Float(t.width) / 150
         let pitch = max(-80 * .pi / 180, min(80 * .pi / 180, Self.pitch + Float(t.height) / 150))
         cubeRoot.orientation = simd_quatf(angle: pitch, axis: SIMD3(1, 0, 0))
             * simd_quatf(angle: yaw, axis: SIMD3(0, 1, 0)) * poseOrientation
@@ -190,7 +194,10 @@ final class Cube3DController {
     func setPose(_ p: Cube3DPose?, animated: Bool) {
         let p = p ?? Cube3DPose(orientation: simd_quatf(angle: 0, axis: SIMD3(0, 1, 0)), token: poseToken ?? 0)
         let replay = p.token != poseToken && poseToken != nil && p.replayFrom != nil
-        guard p.orientation != poseOrientation || replay else {
+        let yaw = p.viewFromLeft ? -Self.yaw : Self.yaw
+        let yawChanged = yaw != viewYaw
+        viewYaw = yaw
+        guard p.orientation != poseOrientation || replay || yawChanged else {
             poseToken = p.token
             return
         }
@@ -201,7 +208,7 @@ final class Cube3DController {
             cubeRoot.orientation = targetOrientation
             return
         }
-        if replay, let from = p.replayFrom { cubeRoot.orientation = Self.restOrientation * from }
+        if replay, let from = p.replayFrom { cubeRoot.orientation = rest * from }
         var t = cubeRoot.transform
         t.rotation = targetOrientation
         cubeRoot.move(to: t, relativeTo: shakeRoot, duration: Cube3DPose.turnSeconds, timingFunction: .easeInOut)
@@ -265,10 +272,10 @@ final class Cube3DController {
             let nv = g.normals[face.rawValue * n * n]
             let normal = SIMD3<Float>(Float(nv.x), Float(nv.y), Float(nv.z))
             let root = Entity()
-            let thick: Float = 0.09, len = 2 * half + 0.2
+            let thick: Float = 0.07, len = 2 * half + 0.07
             for k in 0..<4 {
                 let bar = ModelEntity(mesh: .generateBox(width: len, height: thick, depth: 0.04), materials: [mat])
-                let along: Float = (k % 2 == 0 ? 1 : -1) * (half + 0.05)
+                let along: Float = (k % 2 == 0 ? 1 : -1) * half
                 bar.position = k < 2 ? SIMD3(0, along, 0) : SIMD3(along, 0, 0)
                 if k >= 2 { bar.orientation = simd_quatf(angle: .pi / 2, axis: SIMD3(0, 0, 1)) }
                 root.addChild(bar)

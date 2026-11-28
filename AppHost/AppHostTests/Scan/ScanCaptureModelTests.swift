@@ -103,4 +103,14 @@ final class ScanCaptureModelTests: XCTestCase {
         XCTAssertEqual(m.glowFace, .u)
         XCTAssertEqual(ScanOrientation.frontFace(m.pose), .u)
     }
+
+    func testA11yMoTaBuoc() {
+        let st = ScanProtocol.cube3
+        let s = ScanText.accessibility(step: st[1], captured: 1, awaitingTurn: true)
+        XCTAssertTrue(s.contains("1 of 6"), s)
+        XCTAssertTrue(s.contains("turn the whole cube left"), s)
+        let turns: [ScanTurn] = [.none, .left, .tiltTowardYou, .flipTowardYou, .tiltAwayFromYou]
+        XCTAssertEqual(Set(turns.map(ScanText.turn)).count, turns.count)
+        XCTAssertTrue(ScanText.accessibility(step: st[5], captured: 6, awaitingTurn: true).contains("All 6"))
+    }
 }

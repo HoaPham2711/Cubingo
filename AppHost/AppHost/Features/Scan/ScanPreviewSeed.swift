@@ -30,6 +30,27 @@ enum ScanPreviewSeed {
         return step.image.map { s[$0] }
     }
 
+    /// Trạng thái dựng sẵn của màn quét để chụp ảnh UI.
+    enum Preset { case midScan, turning }
+
+    /// Đặt bởi `AppPreview` (route `scan` / `scanTurn`).
+    static var preset: Preset?
+    /// Có giá trị ⇒ nguồn giả luôn phát đúng khung này (giữ nguyên trạng thái để chụp).
+    static var frozenFrame: [CubeRGB]?
+
+    /// Đã chụp 2 mặt, đang nhận màu mặt 3 (`midScan`) / đã chụp 3 mặt, đang chờ xoay (`turning`).
+    @MainActor
+    static func apply(to m: ScanCaptureModel) {
+        guard let preset, m.capturedCount == 0 else { return }
+        let k = preset == .midScan ? 2 : 3
+        for st in ScanProtocol.cube3.prefix(k) {
+            for _ in 0..<3 { m.observe(image(st)) }
+            m.capture()
+        }
+        frozenFrame = image(ScanProtocol.cube3[2])
+        m.observe(image(ScanProtocol.cube3[2]))
+    }
+
     /// Kết quả quét đầy đủ của trạng thái mẫu (route `review`).
     static var scanResult: ScanResult { ScanClusterer.cluster(samples54, n: 3) }
 

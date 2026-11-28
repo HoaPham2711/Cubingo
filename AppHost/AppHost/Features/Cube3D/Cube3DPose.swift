@@ -12,13 +12,16 @@ struct Cube3DPose: Equatable {
     var orientation: simd_quatf
     var replayFrom: simd_quatf?
     var token: Int
+    /// Góc nhìn lệch sang TRÁI thay vì phải (màn quét: mặt vừa quét — đã sang trái sau khi xoay — vẫn thấy được).
+    var viewFromLeft: Bool
 
     static let turnSeconds = 0.9
 
-    init(orientation: simd_quatf, replayFrom: simd_quatf? = nil, token: Int = 0) {
+    init(orientation: simd_quatf, replayFrom: simd_quatf? = nil, token: Int = 0, viewFromLeft: Bool = false) {
         self.orientation = orientation
         self.replayFrom = replayFrom
         self.token = token
+        self.viewFromLeft = viewFromLeft
     }
 }
 

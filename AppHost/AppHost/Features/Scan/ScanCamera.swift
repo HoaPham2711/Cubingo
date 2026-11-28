@@ -98,7 +98,7 @@ final class ScanCamera: ObservableObject {
         seedTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 guard let self else { return }
-                self.samples = self.seedFrame
+                self.samples = ScanPreviewSeed.frozenFrame ?? self.seedFrame
                 try? await Task.sleep(nanoseconds: 100_000_000)
             }
         }

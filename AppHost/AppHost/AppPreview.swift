@@ -10,7 +10,7 @@ import SwiftUI
 enum AppPreview: String, UIPreviewRoute {
     case home, onboarding, settings, paywall, whatsNew, feedback
     // Route của tính năng (sau sáu route khung).
-    case scan, review, mode, guide, guideStageDone, done
+    case scan, scanTurn, review, mode, guide, guideStageDone, done
 
     var isOnboarding: Bool {
         switch self {
@@ -81,7 +81,9 @@ enum AppPreviewSeed {
     static func prepareFlow(_ flow: FlowModel) {
         guard flow.path.isEmpty else { return }
         switch AppPreview.current {
-        case .scan: flow.choose(.cube3)
+        case .scan, .scanTurn:
+            ScanPreviewSeed.preset = AppPreview.current == .scan ? .midScan : .turning
+            flow.choose(.cube3)
         case .review:
             flow.choose(.cube3)
             flow.didScan(ScanPreviewSeed.scanResultWithMistake)

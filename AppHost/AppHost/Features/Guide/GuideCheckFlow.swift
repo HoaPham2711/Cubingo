@@ -48,7 +48,7 @@ struct GuideCheckView: View {
                 if mismatch {
                     mismatchView
                 } else if deps.cameraAuth.status() == .authorized {
-                    ScanView(flow: flow, deps: deps,
+                    ScanCheckView(flow: flow, deps: deps,
                              mode: .checkFace(GuideCheck.spec(kind), expected: session.state),
                              onFace: { samples in
                                  let o = GuideCheckFlow.outcome(samples: samples, palette: palette,
